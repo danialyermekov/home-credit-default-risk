@@ -24,30 +24,6 @@ The project focuses not only on maximizing predictive performance, but also on b
 * model interpretation;
 * reproducibility.
 
----
-
-## Project status
-
-| Stage                          | Status      |
-| ------------------------------ | ----------- |
-| Data loading and optimization  | ✅ Completed |
-| Exploratory data analysis      | ✅ Completed |
-| Missing-value analysis         | ✅ Completed |
-| Statistical hypothesis testing | ✅ Completed |
-| Feature engineering            | ✅ Completed |
-| Final feature preparation      | ✅ Completed |
-| Baseline modeling              | ⬜ Planned   |
-| Validation strategy            | ⬜ Planned   |
-| Model comparison               | ⬜ Planned   |
-| Hyperparameter optimization    | ⬜ Planned   |
-| Error analysis                 | ⬜ Planned   |
-| Model interpretation           | ⬜ Planned   |
-| Final model                    | ⬜ Planned   |
-| Inference pipeline             | ⬜ Planned   |
-| Deployment                     | ⬜ Planned   |
-
----
-
 ## Dataset
 
 The current stage uses `application_train.csv` from the Home Credit Default Risk competition.
