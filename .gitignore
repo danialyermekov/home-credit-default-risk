@@ -1,12 +1,71 @@
 # Python-generated files
 __pycache__/
-*.py[oc]
+*.py[cod]
+*$py.class
+*.so
 build/
 dist/
 wheels/
-*.egg-info
+*.egg-info/
 
 # Virtual environments
-.venv
-data
-.vscode
+.venv/
+venv/
+ENV/
+env/
+
+# IDE and Editor files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.DS_Store
+Thumbs.db
+
+# Jupyter / Marimo / Agent artifacts
+.ipynb_checkpoints/
+__marimo__/
+.agents/
+
+# Data files & Archives
+data/
+HomeCredit_columns_description.csv
+*.csv
+*.tsv
+*.parquet
+*.feather
+*.arrow
+*.h5
+*.hdf5
+*.zip
+*.tar.gz
+*.tar
+*.gz
+*.7z
+
+# Model weights, dumps & binary formats
+*.pkl
+*.pickle
+*.joblib
+*.npy
+*.npz
+*.onnx
+*.pt
+*.pth
+*.bin
+*.model
+*.cbm
+
+# Databases & Experiment Tracking
+*.db
+*.sqlite
+*.sqlite3
+mlruns/
+mlartifacts/
+artifacts/
+catboost_info/
+wandb/
+lightning_logs/
+
+# Logs
+*.log

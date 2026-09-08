@@ -496,7 +496,10 @@ Run the Marimo analysis:
 ```bash
 marimo edit eda.py
 ```
-
+Run MlFLow:
+```bash
+uv run mlflow server --host 127.0.0.1 --port 5000 --backend-store-uri sqlite:///mlflow.db --default-artifact-root ./mlartifacts
+```
 Place the Home Credit training dataset in the expected local data directory before running the analysis.
 
 The raw dataset is intentionally excluded from Git.
