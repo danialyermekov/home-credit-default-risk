@@ -1,3 +1,7 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "home-credit"
 version = "0.1.0"
@@ -20,3 +24,11 @@ dependencies = [
     "seaborn>=0.13.2",
     "xgboost>=3.4.1",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/home_credit"]

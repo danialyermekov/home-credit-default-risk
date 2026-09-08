@@ -80,7 +80,10 @@ def _():
 
     from scipy.stats import spearmanr, rankdata
 
-    from assemble_features import build_test_features
+    try:
+        from home_credit.features.assemble import build_test_features
+    except ImportError:
+        from assemble_features import build_test_features
 
     return (
         CatBoostClassifier,

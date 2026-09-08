@@ -5,6 +5,8 @@ Verifies:
 2. Interface contracts and types.
 3. Feature parity and alignment with ACCEPTED_FINAL_FEATURES.
 4. Correct assembly and categorical handling.
+5. Production schema constraints (length=166, unique, no TARGET, no IPX).
+6. Parity with trained model artifacts.
 """
 
 from __future__ import annotations
@@ -15,35 +17,40 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from assemble_features import (
-    ACCEPTED_CATEGORICAL_FEATURES,
-    assemble_features,
+from home_credit.features.application import (
     build_application_features,
+)
+from home_credit.features.assemble import (
+    assemble_features,
     load_accepted_final_features,
 )
-from bureau_balance_features import (
-    BBX_ACCEPTED_FEATURES,
-    build_bureau_balance_features,
-)
-from bureau_features import (
+from home_credit.features.bureau import (
     BUREAU_ACCEPTED_FEATURES,
     build_bureau_features,
 )
-from credit_card_features import (
+from home_credit.features.bureau_balance import (
+    BBX_ACCEPTED_FEATURES,
+    build_bureau_balance_features,
+)
+from home_credit.features.credit_card import (
     CREDIT_CARD_ACCEPTED_FEATURES,
     build_credit_card_features,
 )
-from installments_features import (
+from home_credit.features.installments import (
     INSTALLMENTS_ACCEPTED_FEATURES,
     build_installments_features,
 )
-from pos_cash_features import (
+from home_credit.features.pos_cash import (
     POS_ACCEPTED_FEATURES,
     build_pos_cash_features,
 )
-from previous_application_features import (
+from home_credit.features.previous_application import (
     PREVIOUS_APPLICATION_ACCEPTED_FEATURES,
     build_previous_application_features,
+)
+from home_credit.schema import (
+    ACCEPTED_CATEGORICAL_FEATURES,
+    ACCEPTED_FINAL_FEATURES,
 )
 
 
@@ -219,7 +226,7 @@ class TestFeatureModules(unittest.TestCase):
 
     def test_assemble_features_alignment(self):
         """Verify that assemble_features produces exactly the 166 model features."""
-        final_features = load_accepted_final_features()
+        final_features = list(ACCEPTED_FINAL_FEATURES)
 
         # Build dummy application table with all necessary columns
         app_dict = {
@@ -252,6 +259,78 @@ class TestFeatureModules(unittest.TestCase):
                 isinstance(assembled[cat_col].dtype, pd.CategoricalDtype),
                 f"{cat_col} is not category dtype",
             )
+
+    def test_schema_contract(self):
+        """Verify schema constraints: length=166, no duplicates, no TARGET, no F8/IPX."""
+        # 1. Final schema length = 166
+        self.assertEqual(len(ACCEPTED_FINAL_FEATURES), 166)
+
+        # 2. No duplicate feature names
+        self.assertEqual(len(set(ACCEPTED_FINAL_FEATURES)), 166)
+
+        # 5. No TARGET inside model feature list
+        self.assertNotIn("TARGET", ACCEPTED_FINAL_FEATURES)
+
+        # 6. F8/IPX features are not in ACCEPTED_FINAL_FEATURES
+        ipx_features = [f for f in ACCEPTED_FINAL_FEATURES if f.startswith("IPX_")]
+        self.assertEqual(ipx_features, [])
+        self.assertNotIn("IPX", ACCEPTED_FINAL_FEATURES)
+
+        # 7. POSX and BBX accepted columns exist in ACCEPTED_FINAL_FEATURES
+        for posx in POS_ACCEPTED_FEATURES:
+            self.assertIn(posx, ACCEPTED_FINAL_FEATURES)
+        for bbx in BBX_ACCEPTED_FEATURES:
+            self.assertIn(bbx, ACCEPTED_FINAL_FEATURES)
+
+        # Categorical features
+        self.assertEqual(len(ACCEPTED_CATEGORICAL_FEATURES), 15)
+        for cat in ACCEPTED_CATEGORICAL_FEATURES:
+            self.assertIn(cat, ACCEPTED_FINAL_FEATURES)
+
+    def test_assemble_features_ordering_and_uniqueness(self):
+        """Verify final assembly output has exact feature order and unique SK_ID_CURR."""
+        app_dict = {
+            "SK_ID_CURR": [100001, 100002],
+            "DAYS_BIRTH": [-15000, -18000],
+            "DAYS_EMPLOYED": [-1000, 365243],
+            "AMT_INCOME_TOTAL": [200000.0, 150000.0],
+            "AMT_CREDIT": [500000.0, 300000.0],
+            "AMT_ANNUITY": [25000.0, 18000.0],
+        }
+        for c in ACCEPTED_FINAL_FEATURES:
+            if c not in app_dict:
+                if c in ACCEPTED_CATEGORICAL_FEATURES:
+                    app_dict[c] = ["Val1", "Val2"]
+                else:
+                    app_dict[c] = [0.0, 1.0]
+        raw_app = pd.DataFrame(app_dict)
+
+        # 3. Final assembly output has exact feature order (without ID)
+        assembled_no_id = assemble_features(application=raw_app, include_id=False)
+        self.assertEqual(list(assembled_no_id.columns), list(ACCEPTED_FINAL_FEATURES))
+        # 4. SK_ID_CURR uniqueness as index
+        self.assertTrue(assembled_no_id.index.is_unique)
+
+        # Assembly with ID included
+        assembled_with_id = assemble_features(application=raw_app, include_id=True)
+        self.assertEqual(
+            list(assembled_with_id.columns),
+            ["SK_ID_CURR"] + list(ACCEPTED_FINAL_FEATURES),
+        )
+        # 4. SK_ID_CURR uniqueness as column
+        self.assertTrue(assembled_with_id["SK_ID_CURR"].is_unique)
+
+    def test_model_artifact_compatibility(self):
+        """8. Verify final production assembly is compatible with trained model schema."""
+        model_paths = [
+            Path("artifacts/models/lightgbm_full_model.txt"),
+            Path("artifacts/models/xgboost_full_model.json"),
+            Path("artifacts/models/catboost_full_model.cbm"),
+        ]
+        for p in model_paths:
+            if p.exists():
+                loaded = load_accepted_final_features(p)
+                self.assertEqual(loaded, list(ACCEPTED_FINAL_FEATURES))
 
 
 if __name__ == "__main__":

@@ -445,24 +445,54 @@ This section will describe how raw input data is transformed into model-ready fe
 
 ## Project structure
 
-The repository structure will evolve together with the project.
+The repository is organized into a modular ML production package, clean GitHub presentation notebooks, automated test suites, and archival research artifacts:
 
 ```text
-home-credit-default-risk/
-│
-├── data/
+home-credit/
+├── src/
+│   └── home_credit/             # Reusable package code
+│       ├── features/            # Feature engineering modules & assembly
+│       │   ├── application.py
+│       │   ├── bureau.py
+│       │   ├── bureau_balance.py
+│       │   ├── previous_application.py
+│       │   ├── credit_card.py
+│       │   ├── installments.py
+│       │   ├── pos_cash.py
+│       │   └── assemble.py
+│       ├── schema.py            # Frozen production 166-feature schema
+│       └── inference/           # Inference runtime utilities
+├── notebooks/                   # Clean GitHub-readable walkthroughs
+│   ├── 01_feature_engineering.ipynb
+│   └── 02_modeling_report.ipynb
+├── tests/                       # Automated checks & feature parity tests
+│   └── test_features.py
+├── research/                    # Full experiment history (frozen archival Marimo notebooks)
+│   ├── eda.py
+│   ├── datasets.py
+│   └── modeling.py
+├── data/                        # Local raw tables and processed datasets (excluded from Git)
 │   ├── raw/
 │   └── processed/
-│
-├── eda.py
-├── README.md
-├── requirements.txt
-└── .gitignore
+├── artifacts/                   # Local model / experiment outputs
+│   ├── models/                  # Trained CatBoost, LightGBM, and XGBoost full models
+│   ├── predictions/             # Out-of-fold predictions
+│   ├── tracking/                # Local MLflow and Optuna SQLite databases
+│   └── split_v1.parquet         # Fixed 85/15 stratified train/holdout split
+├── outputs/                     # Submissions / exported results
+│   └── submissions/
+├── pyproject.toml               # Project metadata, dependencies, and build configuration
+├── uv.lock                      # Exact locked dependency graph
+├── requirements.txt             # Auxiliary dependency specification
+└── README.md
 ```
 
-Large datasets and generated data files are excluded from version control.
-
-As the modeling and deployment stages are implemented, the project structure will be expanded accordingly.
+- **`src/home_credit/`**: Reusable Python package containing typed feature builders and the frozen production schema.
+- **`notebooks/`**: Clean, top-to-bottom runnable notebooks demonstrating feature engineering and summarizing modeling results for GitHub portfolios.
+- **`tests/`**: Automated unit and parity tests verifying schema integrity and feature calculation accuracy.
+- **`research/`**: Complete historical research trajectory (EDA, multi-table dataset exploration, and full modeling experimentation).
+- **`artifacts/`**: Materialized model binaries, OOF predictions, tracking databases, and fixed splits.
+- **`outputs/`**: Final competition test submissions and exports.
 
 ---
 
@@ -475,37 +505,45 @@ Current tools:
 * NumPy
 * SciPy
 * scikit-learn
+* LightGBM
+* CatBoost
+* XGBoost
+* Optuna
+* MLflow
 * Plotly
 * Marimo
 * PyArrow
-
-Additional tools will be documented when they are actually introduced into the project.
+* Pytest
 
 ---
 
 ## Running the project
 
-Install dependencies:
+Install dependencies and the `home_credit` package in editable mode using `uv`:
 
 ```bash
-pip install -r requirements.txt
+uv sync
 ```
 
-Run the Marimo analysis:
+Run test suite:
 
 ```bash
-marimo edit eda.py
+uv run pytest
 ```
-Run MlFLow:
+
+Explore research notebooks (Marimo):
+
 ```bash
-uv run mlflow server --host 127.0.0.1 --port 5000 --backend-store-uri sqlite:///mlflow.db --default-artifact-root ./mlartifacts
+uv run marimo edit research/eda.py
+uv run marimo edit research/datasets.py
+uv run marimo edit research/modeling.py
 ```
-Place the Home Credit training dataset in the expected local data directory before running the analysis.
 
-The raw dataset is intentionally excluded from Git.
+Run MLflow tracking UI:
 
----
+```bash
+uv run mlflow server --host 127.0.0.1 --port 5000 --backend-store-uri sqlite:///artifacts/tracking/mlflow.db --default-artifact-root ./mlartifacts
+```
 
-## Next step
+Place the Home Credit raw dataset in `data/raw/` before running full feature generation. The raw dataset is intentionally excluded from Git.
 
-The next stage is to establish a modeling baseline and validation framework before attempting optimization.

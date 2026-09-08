@@ -1,17 +1,17 @@
 """Feature assembly module.
 
 Assembles the complete feature matrix for application_test (or application_train)
-by orchestrating the application-level preprocessing and all six historical-table
+by orchestrating application-level preprocessing and all six historical-table
 feature engineering modules:
-1. bureau_features
-2. previous_application_features
-3. installments_features
-4. credit_card_features
-5. pos_cash_features
-6. bureau_balance_features
+1. bureau
+2. previous_application
+3. installments
+4. credit_card
+5. pos_cash
+6. bureau_balance
 
 Guarantees that the resulting feature matrix has the exact column names, order,
-and compatible dtypes defined by ACCEPTED_FINAL_FEATURES from modeling.py.
+and compatible dtypes defined by ACCEPTED_FINAL_FEATURES from schema.py.
 """
 
 from __future__ import annotations
@@ -23,145 +23,81 @@ from typing import Sequence
 import numpy as np
 import pandas as pd
 
-from bureau_balance_features import build_bureau_balance_features
-from bureau_features import BUREAU_COUNT_FEATURES, build_bureau_features
-from credit_card_features import build_credit_card_features
-from installments_features import build_installments_features
-from pos_cash_features import build_pos_cash_features
-from previous_application_features import build_previous_application_features
-
-# Tokens used to identify raw housing columns for computing HOUSING_INFO_MISSING_PCT
-HOUSING_COLUMN_TOKENS: list[str] = [
-    "APARTMENTS",
-    "BASEMENTAREA",
-    "COMMONAREA",
-    "ELEVATORS",
-    "ENTRANCES",
-    "FLOORSMAX",
-    "FLOORSMIN",
-    "LANDAREA",
-    "LIVINGAPARTMENTS",
-    "LIVINGAREA",
-    "NONLIVINGAPARTMENTS",
-    "NONLIVINGAREA",
-    "YEARS_BUILD",
-    "YEARS_BEGINEXPLUATATION",
-]
-
-# The 15 categorical features expected by final models
-ACCEPTED_CATEGORICAL_FEATURES: list[str] = [
-    "NAME_CONTRACT_TYPE",
-    "CODE_GENDER",
-    "FLAG_OWN_CAR",
-    "NAME_TYPE_SUITE",
-    "NAME_INCOME_TYPE",
-    "NAME_EDUCATION_TYPE",
-    "NAME_FAMILY_STATUS",
-    "NAME_HOUSING_TYPE",
-    "OCCUPATION_TYPE",
-    "WEEKDAY_APPR_PROCESS_START",
-    "ORGANIZATION_TYPE",
-    "FONDKAPREMONT_MODE",
-    "HOUSETYPE_MODE",
-    "WALLSMATERIAL_MODE",
-    "EMERGENCYSTATE_MODE",
-]
+from home_credit.features.application import (
+    HOUSING_COLUMN_TOKENS,
+    build_application_features,
+)
+from home_credit.features.bureau import (
+    BUREAU_ACCEPTED_FEATURES,
+    BUREAU_COUNT_FEATURES,
+    build_bureau_features,
+)
+from home_credit.features.bureau_balance import (
+    BBX_ACCEPTED_FEATURES,
+    build_bureau_balance_features,
+)
+from home_credit.features.credit_card import (
+    CREDIT_CARD_ACCEPTED_FEATURES,
+    build_credit_card_features,
+)
+from home_credit.features.installments import (
+    INSTALLMENTS_ACCEPTED_FEATURES,
+    build_installments_features,
+)
+from home_credit.features.pos_cash import (
+    POS_ACCEPTED_FEATURES,
+    build_pos_cash_features,
+)
+from home_credit.features.previous_application import (
+    PREVIOUS_APPLICATION_ACCEPTED_FEATURES,
+    build_previous_application_features,
+)
+from home_credit.schema import (
+    ACCEPTED_CATEGORICAL_FEATURES,
+    ACCEPTED_FINAL_FEATURES,
+)
 
 
 def load_accepted_final_features(
-    model_path: Path | str = "artifacts/lightgbm_full_model.txt",
+    model_path: Path | str | None = None,
 ) -> list[str]:
-    """Load the source-of-truth ACCEPTED_FINAL_FEATURES list from trained model artifacts.
+    """Load the frozen ACCEPTED_FINAL_FEATURES list.
+
+    If model_path is explicitly provided, loads feature_names from model artifact;
+    otherwise returns the frozen 166-feature list from schema.py.
 
     Parameters
     ----------
-    model_path : Path | str, optional
-        Path to lightgbm model artifact containing feature_names.
-        Falls back to xgboost_full_model.json or catboost_full_model.cbm if not found.
+    model_path : Path | str | None, optional
+        Path to model artifact file. If None, returns schema list.
 
     Returns
     -------
     list[str]
         The 166 accepted final feature names in exact model order.
     """
-    lgb_path = Path(model_path)
-    if lgb_path.exists():
-        with open(lgb_path, "r", encoding="utf-8") as f:
-            for line in f:
-                if line.startswith("feature_names="):
-                    return line.strip().split("=")[1].split()
+    if model_path is None:
+        return list(ACCEPTED_FINAL_FEATURES)
 
-    xgb_path = lgb_path.parent / "xgboost_full_model.json"
-    if xgb_path.exists():
-        with open(xgb_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            return list(data["learner"]["feature_names"])
+    p = Path(model_path)
+    if p.exists():
+        if p.suffix == ".txt":
+            with open(p, "r", encoding="utf-8") as f:
+                for line in f:
+                    if line.startswith("feature_names="):
+                        return line.strip().split("=")[1].split()
+        elif p.suffix == ".json":
+            with open(p, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return list(data["learner"]["feature_names"])
+        elif p.suffix == ".cbm":
+            from catboost import CatBoostClassifier
 
-    cb_path = lgb_path.parent / "catboost_full_model.cbm"
-    if cb_path.exists():
-        from catboost import CatBoostClassifier
+            cb = CatBoostClassifier()
+            cb.load_model(str(p))
+            return list(cb.feature_names_)
 
-        cb = CatBoostClassifier()
-        cb.load_model(str(cb_path))
-        return list(cb.feature_names_)
-
-    raise FileNotFoundError(
-        f"Could not load ACCEPTED_FINAL_FEATURES from {model_path} or alternate artifacts."
-    )
-
-
-def build_application_features(
-    application: pd.DataFrame,
-) -> pd.DataFrame:
-    """Prepare application-level features and transformations from raw application data.
-
-    Preserves the exact preprocessing validated in EDA and modeling:
-    - Replaces 365243 anomaly in DAYS_EMPLOYED with NaN
-    - Computes AGE_YEARS and EMPLOYED_YEARS
-    - Computes financial ratios: CREDIT_INCOME_RATIO, ANNUITY_INCOME_RATIO, ANNUITY_CREDIT_RATIO
-    - Computes HOUSING_INFO_MISSING_PCT across housing fields
-    - Replaces missing values in categorical columns with '__MISSING__'
-    - Sets categorical columns to category dtype
-
-    Parameters
-    ----------
-    application : pd.DataFrame
-        Raw application dataframe (e.g. application_test.csv or application_train.csv).
-
-    Returns
-    -------
-    pd.DataFrame
-        Cleaned application dataframe with engineered features.
-    """
-    df = application.copy()
-
-    # Anomaly handling: 365243 in DAYS_EMPLOYED indicates missing/unemployed
-    df["DAYS_EMPLOYED"] = df["DAYS_EMPLOYED"].replace(365243, np.nan)
-
-    # Demographic and employment duration
-    df["AGE_YEARS"] = -df["DAYS_BIRTH"] / 365.25
-    df["EMPLOYED_YEARS"] = -df["DAYS_EMPLOYED"] / 365.25
-
-    # Core financial ratios
-    df["CREDIT_INCOME_RATIO"] = df["AMT_CREDIT"] / df["AMT_INCOME_TOTAL"]
-    df["ANNUITY_INCOME_RATIO"] = df["AMT_ANNUITY"] / df["AMT_INCOME_TOTAL"]
-    df["ANNUITY_CREDIT_RATIO"] = df["AMT_ANNUITY"] / df["AMT_CREDIT"]
-
-    # Housing missingness share
-    housing_cols = [
-        col
-        for col in application.columns
-        if any(token in col for token in HOUSING_COLUMN_TOKENS)
-    ]
-    if housing_cols:
-        df["HOUSING_INFO_MISSING_PCT"] = application[housing_cols].isna().mean(axis=1)
-
-    # Categorical missingness representation
-    for cat_col in ACCEPTED_CATEGORICAL_FEATURES:
-        if cat_col in df.columns:
-            df[cat_col] = df[cat_col].fillna("__MISSING__").astype("category")
-
-    return df
+    return list(ACCEPTED_FINAL_FEATURES)
 
 
 def assemble_features(
@@ -198,7 +134,7 @@ def assemble_features(
     pos_cash_features_df : pd.DataFrame | None, optional
         Precomputed POS features from build_pos_cash_features.
     accepted_features : Sequence[str] | None, optional
-        Explicit feature list. If None, loaded from ACCEPTED_FINAL_FEATURES artifact.
+        Explicit feature list. If None, defaults to ACCEPTED_FINAL_FEATURES.
     include_id : bool, default False
         If True, SK_ID_CURR is included as a regular column.
         If False, SK_ID_CURR is set as the DataFrame index.
@@ -209,7 +145,7 @@ def assemble_features(
         Complete model input matrix.
     """
     if accepted_features is None:
-        final_feature_names = load_accepted_final_features()
+        final_feature_names = list(ACCEPTED_FINAL_FEATURES)
     else:
         final_feature_names = list(accepted_features)
 
@@ -297,6 +233,68 @@ def assemble_features(
     return result
 
 
+def build_feature_dataset(
+    applications: pd.DataFrame,
+    bureau: pd.DataFrame,
+    previous_application: pd.DataFrame,
+    installments_payments: pd.DataFrame,
+    credit_card_balance: pd.DataFrame,
+    pos_cash_balance: pd.DataFrame,
+    bureau_balance: pd.DataFrame,
+    accepted_features: Sequence[str] | None = None,
+    include_id: bool = False,
+) -> pd.DataFrame:
+    """Build the complete feature matrix by computing and assembling features from all raw tables.
+
+    Parameters
+    ----------
+    applications : pd.DataFrame
+        Raw application dataframe.
+    bureau : pd.DataFrame
+        Raw bureau dataframe.
+    previous_application : pd.DataFrame
+        Raw previous_application dataframe.
+    installments_payments : pd.DataFrame
+        Raw installments_payments dataframe.
+    credit_card_balance : pd.DataFrame
+        Raw credit_card_balance dataframe.
+    pos_cash_balance : pd.DataFrame
+        Raw POS_CASH_balance dataframe.
+    bureau_balance : pd.DataFrame
+        Raw bureau_balance dataframe.
+    accepted_features : Sequence[str] | None, optional
+        Explicit feature list (defaults to ACCEPTED_FINAL_FEATURES).
+    include_id : bool, default False
+        Whether to retain SK_ID_CURR as a column or index.
+
+    Returns
+    -------
+    pd.DataFrame
+        Complete feature matrix aligned with ACCEPTED_FINAL_FEATURES.
+    """
+    bureau_feat = build_bureau_features(bureau)
+    bureau_bal_feat = build_bureau_balance_features(
+        bureau_balance,
+        bureau=bureau[["SK_ID_BUREAU", "SK_ID_CURR"]],
+    )
+    prev_feat = build_previous_application_features(previous_application)
+    cc_feat = build_credit_card_features(credit_card_balance)
+    ip_feat = build_installments_features(installments_payments)
+    pos_feat = build_pos_cash_features(pos_cash_balance)
+
+    return assemble_features(
+        application=applications,
+        bureau_features_df=bureau_feat,
+        bureau_balance_features_df=bureau_bal_feat,
+        previous_application_features_df=prev_feat,
+        credit_card_features_df=cc_feat,
+        installments_features_df=ip_feat,
+        pos_cash_features_df=pos_feat,
+        accepted_features=accepted_features,
+        include_id=include_id,
+    )
+
+
 def build_test_features(
     data_dir: Path | str = "data",
     output_path: Path | str | None = None,
@@ -318,7 +316,7 @@ def build_test_features(
     pd.DataFrame
         Complete test feature matrix aligned with ACCEPTED_FINAL_FEATURES.
     """
-    raw_dir = Path(data_dir) / "raw"
+    raw_dir = Path(data_dir) / "raw" if (Path(data_dir) / "raw").exists() else Path(data_dir)
 
     print("Loading application_test.csv...")
     application_test = pd.read_csv(raw_dir / "application_test.csv")
