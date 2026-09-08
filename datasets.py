@@ -2199,7 +2199,7 @@ def _(installments_payments):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## Time-realted
+    ## Time-related
     """)
     return
 
@@ -2561,6 +2561,17 @@ def _():
 def _(pd):
     ip3_df = pd.read_parquet("data/processed/modeling_ip3.parquet")
     return (ip3_df,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## F8 Candidate — Installments Contract-Level Dynamic Features
+
+    ### Objective / Hypothesis
+    Test whether a two-stage aggregation (`installment -> previous contract -> applicant`) capturing contract-level repayment heterogeneity (worst-contract lateness, severe delinquency share, underpayment, latest contract behavior, and recency-weighted patterns) exposes risk signals averaged away by client-level aggregations.
+    """)
+    return
 
 
 @app.cell
@@ -2936,7 +2947,7 @@ def _(pos_cash_balance):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## P1 - POS/Cash contract history and repayment progress
+    ## POS1 - Contract history and repayment progress
     """)
     return
 
@@ -3058,7 +3069,7 @@ def _(modeling_pos1):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## P2 - POS/Cash delinquency history
+    ## POS2 - Delinquency history
     """)
     return
 
@@ -3189,6 +3200,17 @@ def _(ip3_df, pos2_history):
 @app.cell
 def _(modeling_pos2):
     modeling_pos2.to_parquet("data/processed/modeling_pos2.parquet", index=False)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## F9 Candidate — POS/Cash Contract Progress and Dynamic Delinquency
+
+    ### Objective / Hypothesis
+    Construct trajectory-aware POS dynamic features separating recent 6-month behavior from full contract history, capturing remaining installment ratios, latest DPD states, and delinquency worsening.
+    """)
     return
 
 
@@ -3599,6 +3621,17 @@ def _(modeling_bb1):
     return
 
 
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## F9 Candidate — Bureau Balance Dynamic Delinquency Features
+
+    ### Objective / Hypothesis
+    Construct temporal bureau balance features from monthly status records, mapping status codes to ordinal severity levels and tracking recent 6-month and 12-month delinquency rates, maximum severity, and recent status worsening.
+    """)
+    return
+
+
 @app.cell
 def _(np):
     def build_bb_dynamic_features(
@@ -3783,6 +3816,16 @@ def _(build_bb_dynamic_features, bureau, bureau_balance):
     return (bbx_features,)
 
 
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    # Final Research Feature Superset Assembly
+
+    Merge all historical and candidate dynamic feature tables with the base application dataset to produce the final comprehensive research dataset (`data/processed/modeling_final.parquet`).
+    """)
+    return
+
+
 @app.cell
 def _(bbx_features, ipx_features, pd, posx_features):
     training_dataset = pd.read_parquet("data/processed/modeling_bb1.parquet")
@@ -3840,6 +3883,29 @@ def _(training_dataset):
         "data/processed/modeling_final.parquet",
         index=False,
     )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## Dataset freeze
+
+    `modeling_final.parquet` is the final research superset and intentionally contains candidate features required for late-stage experiments, including the rejected F8/IPX bundle.
+
+    It must not be interpreted as the production model schema.
+
+    The final frozen production representation is defined exclusively by `ACCEPTED_FINAL_FEATURES` in `modeling.py`:
+
+    - RFE2 core: 148 features
+    - POSX: 9 features
+    - BBX: 9 features
+    - Total: 166 features
+
+    F8/IPX and all other rejected experimental features are excluded from production inference.
+
+    **DATASET RESEARCH STAGE CLOSED**
+    """)
     return
 
 

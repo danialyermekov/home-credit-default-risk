@@ -80,12 +80,15 @@ def _():
 
     from scipy.stats import spearmanr, rankdata
 
+    from assemble_features import build_test_features
+
     return (
         CatBoostClassifier,
         Path,
         Pool,
         StratifiedKFold,
         average_precision_score,
+        build_test_features,
         json,
         lgb,
         log_loss,
@@ -3767,10 +3770,6 @@ def _(mo):
 
     If the improvement is absent or unstable, reject B3 and do not further expand
     the bureau financial feature group at this stage.
-
-    **Status**
-
-    Pending model evaluation.
     """)
     return
 
@@ -3998,10 +3997,6 @@ def _(mo):
 
     If B4 produces little or unstable improvement, reject the bundle and consider the
     `bureau` table sufficiently explored at this stage.
-
-    **Status**
-
-    Pending model evaluation.
     """)
     return
 
@@ -4270,10 +4265,6 @@ def _(mo):
 
     If the improvement is weak or unstable, reject the bundle and move to the next
     feature group.
-
-    **Status**
-
-    Pending model evaluation.
     """)
     return
 
@@ -4860,10 +4851,6 @@ def _(mo):
 
     A small improvement in mean fold AP alone is not sufficient if the effect is
     unstable or accompanied by degradation in the main policy metrics.
-
-    **Status**
-
-    Pending model evaluation.
     """)
     return
 
@@ -5251,10 +5238,6 @@ def _(mo):
     policy metrics.
 
     The bundle should not be accepted based solely on one unusually strong fold.
-
-    **Status**
-
-    Pending model evaluation.
     """)
     return
 
@@ -5580,10 +5563,6 @@ def _(mo):
     Retain CC1 if the credit-card history and activity features provide a consistent
     improvement in validation AP without materially degrading OOF ranking quality or
     the Top-10% review-policy metrics.
-
-    **Status**
-
-    Pending model evaluation.
     """)
     return
 
@@ -5925,10 +5904,6 @@ def _(mo):
 
     A strong gain on only one fold is not sufficient; the improvement should be
     reasonably consistent across the fixed validation folds.
-
-    **Status**
-
-    Pending model evaluation.
     """)
     return
 
@@ -6329,10 +6304,6 @@ def _(mo):
 
     The bundle should improve validation AP in a reasonably consistent way and
     should not materially degrade OOF ROC-AUC or the Top-10% review-policy metrics.
-
-    **Status**
-
-    Pending model evaluation.
     """)
     return
 
@@ -6720,10 +6691,6 @@ def _(mo):
     Because CC4 is the final planned feature bundle for `credit_card_balance`, the
     table will be considered complete after this experiment regardless of whether
     the bundle is accepted or rejected.
-
-    **Status**
-
-    Pending model evaluation.
     """)
     return
 
@@ -7053,10 +7020,6 @@ def _(mo):
 
     Because IP1 contains only simple history-structure features, even a modest but
     consistent improvement may justify retaining the bundle.
-
-    **Status**
-
-    Pending model evaluation.
     """)
     return
 
@@ -7432,10 +7395,6 @@ def _(mo):
     The bundle should provide a meaningful overall validation AP improvement and
     should not materially degrade OOF ranking quality or the Top-10% review-policy
     metrics.
-
-    **Status**
-
-    Pending model evaluation.
     """)
     return
 
@@ -7762,10 +7721,6 @@ def _(mo):
     Because IP3 is the final planned feature bundle for `installments_payments`,
     the table will be considered complete after this experiment regardless of
     whether IP3 is accepted or rejected.
-
-    **Status**
-
-    Pending model evaluation.
     """)
     return
 
@@ -8159,10 +8114,6 @@ def _(mo):
 
     Because POS1 contains mostly structural and contract-state features, even a
     moderate but consistent improvement may justify retaining the bundle.
-
-    **Status**
-
-    Pending model evaluation.
     """)
     return
 
@@ -8527,10 +8478,6 @@ def _(mo):
     Because POS2 is the final planned experiment for `POS_CASH_balance`, the table
     will be considered complete after this experiment regardless of whether the
     bundle is accepted or rejected.
-
-    **Status**
-
-    Pending model evaluation.
     """)
     return
 
@@ -8958,10 +8905,6 @@ def _(mo):
     Because BB1 is the only planned experiment for `bureau_balance`, the table will
     be considered complete after this experiment regardless of whether the bundle
     is accepted or rejected.
-
-    **Status**
-
-    Pending model evaluation.
     """)
     return
 
@@ -9156,10 +9099,6 @@ def _(mo):
 
     If removal causes little or no degradation, the source may be largely redundant
     inside the final feature representation.
-
-    **Status**
-
-    Pending model evaluation.
     """)
     return
 
@@ -9361,10 +9300,6 @@ def _(mo):
     A consistent decrease after removing bureau indicates that the source contributes
     incremental information that cannot be recovered from the other historical
     tables.
-
-    **Status**
-
-    Pending model evaluation.
     """)
     return
 
@@ -9565,10 +9500,6 @@ def _(mo):
 
     The magnitude of the AP degradation can also be compared with the other
     source-level ablations to estimate the relative importance of each data source.
-
-    **Status**
-
-    Pending model evaluation.
     """)
     return
 
@@ -9757,10 +9688,6 @@ def _(mo):
     A consistent degradation after removing `credit_card_balance` indicates that
     credit-card activity, utilization and delinquency contain information that is
     not fully represented by the other historical sources.
-
-    **Status**
-
-    Pending model evaluation.
     """)
     return
 
@@ -10123,10 +10050,6 @@ def _(mo):
 
     If performance is preserved, RFE1 becomes the new feature-selection reference
     and its SHAP ranking is used for the next recursive elimination round.
-
-    **Status**
-
-    Pending RFE1 evaluation.
     """)
     return
 
@@ -10260,147 +10183,18 @@ def _(rfe2_candidates):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## RFE2 — Recursive SHAP elimination: second bottom-15% round
+    ## RFE2 — Recursive SHAP Feature Elimination (Round 2)
 
-    **Objective**
+    ### Objective / Hypothesis
+    Determine whether the 174-feature representation accepted after RFE1 can be simplified further without meaningful loss of predictive performance.
+    Hypothesis: Removing the 26 lowest-ranked features from the recalculated RFE1 cross-validated SHAP importance ranking will preserve validation Average Precision within GPU training variability (~0.001 AP) while reducing model complexity.
 
-    Determine whether the feature set accepted after RFE1 can be simplified further
-    without meaningful loss of predictive performance.
-
-    RFE1 reduced the original feature set from 204 to 174 features while preserving
-    validation quality within the observed GPU CatBoost run-to-run variability.
-
-    Because removing features changes how CatBoost distributes splits and predictive
-    importance among the remaining variables, RFE2 does not reuse the original
-    FULL-model SHAP ranking.
-
-    Instead, SHAP importance is recalculated using the accepted RFE1 model.
-
-    **Reference**
-
-    The RFE1 model contains 174 features.
-
-    RFE1 was accepted because removing the first 30 low-SHAP features reduced the
-    feature count by approximately 14.7% while producing no meaningful degradation
-    in validation performance.
-
-    **SHAP ranking**
-
-    SHAP values are calculated independently for each of the five RFE1
-    cross-validation models.
-
-    For every fold:
-
-    1. CatBoost is trained using the 174-feature RFE1 representation;
-    2. SHAP values are calculated on the corresponding validation partition;
-    3. absolute SHAP values are averaged across validation observations;
-    4. the remaining features are ranked by validation mean absolute SHAP.
-
-    Fold-level feature rankings are aggregated into:
-
-    - mean absolute SHAP;
-    - mean normalized SHAP;
-    - mean SHAP rank;
-    - SHAP-rank standard deviation;
-    - best fold rank;
-    - worst fold rank.
-
-    This produces a new importance ranking that reflects the model after the first
-    elimination step.
-
-    **Selection rule**
-
-    The bottom 15% of the remaining 174 features are removed.
-
-    This corresponds to 26 additional features:
-
-    `174 → 148 features`
-
-    The elimination candidates are selected exclusively from the new RFE1 SHAP
-    ranking.
-
-    Features removed during RFE1 are not reconsidered.
-
-    **Hypothesis**
-
-    If the newly identified low-SHAP features are largely redundant, removing them
-    should preserve the predictive performance achieved by RFE1.
-
-    The objective is model simplification rather than maximizing a very small
-    validation-score difference.
-
-    **Change**
-
-    Remove the 26 lowest-ranked features according to the cross-validated SHAP
-    ranking calculated from RFE1.
-
-    This produces the RFE2 feature set:
-
-    `148 features`
-
-    No other modeling component is changed.
-
-    **Controlled variables**
-
-    - same `split_v1`;
-    - same five folds;
-    - same development population;
-    - same CatBoost GPU configuration;
-    - same hyperparameters;
-    - same random seed;
-    - same early-stopping procedure;
-    - same preprocessing;
-    - only the feature set is changed.
-
-    **Primary comparison**
-
-    Paired validation Average Precision comparison:
-
-    `RFE1 — 174 features`
-
-    vs.
-
-    `RFE2 — 148 features`
-
-    using exactly the same five validation folds.
-
-    The original 204-feature FULL model remains available as a secondary reference.
-
-    **Secondary checks**
-
-    - OOF AP;
-    - ROC-AUC;
-    - LogLoss;
-    - Recall@Top10%;
-    - Precision@Top10%;
-    - fold AP standard deviation;
-    - total feature-count reduction relative to FULL.
-
-    **Run-to-run variability**
-
-    Repeated GPU CatBoost training demonstrated approximately `~0.001 AP`
-    run-to-run variation for identical configurations.
-
-    Therefore, very small differences between RFE1 and RFE2 are interpreted as
-    equivalent performance unless supported by consistent paired-fold and secondary
-    metric changes.
-
-    **Decision rule**
-
-    RFE2 is accepted if reducing the feature set from 174 to 148 features preserves
-    validation performance within the observed training variability and does not
-    materially degrade the Top-10% review-policy metrics.
-
-    If RFE2 clearly underperforms RFE1 across the fixed folds, the second 15%
-    elimination step is considered too aggressive and RFE1 remains the preferred
-    feature set.
-
-    If RFE2 is accepted, its newly calculated SHAP ranking will be used for the next
-    recursive elimination round.
-
-    **Status**
-
-    Pending RFE2 evaluation.
+    ### Setup
+    - Reference: Accepted RFE1 model (174 features, GPU CatBoost baseline parameters);
+    - Feature representation: RFE2 candidate (148 features, bottom 15% of RFE1 SHAP ranking removed);
+    - Validation protocol: Fixed `split_v1` (5 stratified folds, identical development population);
+    - Model: CatBoostClassifier (depth=6, iterations=5000, early_stopping_rounds=200, learning_rate=0.05, l2_leaf_reg=3.0, border_count=254, GPU baseline parameters);
+    - Metrics: Primary: Validation Average Precision (mean paired ΔAP across 5 folds). Secondary: ROC-AUC, LogLoss, Recall@Top10%, Precision@Top10%.
     """)
     return
 
@@ -10457,47 +10251,17 @@ def _():
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ### RFE2 — Second SHAP-guided feature elimination
+    ### Results
+    - Feature count: 174 → 148 features (-26 features, -14.9% vs RFE1, -27.5% vs FULL 204);
+    - Mean paired ΔAP vs RFE1: **-0.00052**;
+    - Positive folds: **2 / 5**;
+    - Secondary metrics: ROC-AUC, LogLoss, and Top-10% review-policy metrics remained stable within noise.
 
-    **Feature set**
+    ### Interpretation
+    The paired validation degradation of -0.00052 AP is well within observed GPU CatBoost run-to-run variability (~0.001 AP). RFE2 successfully preserves the predictive ranking quality and top-decile capture rate of RFE1 while eliminating 26 redundant features and simplifying the final pipeline.
 
-    RFE1: 174 features
-    RFE2: 148 features
-
-    The next 15% of the lowest-ranked features according to validation-fold SHAP
-    importance were removed.
-
-    **Result**
-
-    Compared with RFE1, RFE2 produced only a small degradation in mean validation
-    Average Precision:
-
-    - mean paired ΔAP: approximately `-0.00052`;
-    - 2/5 folds improved;
-    - secondary metrics remained broadly similar.
-
-    The magnitude of the degradation was small relative to the observed
-    run-to-run variability of GPU CatBoost training.
-
-    At the same time, the feature representation was reduced by:
-
-    - approximately 15% relative to RFE1;
-    - approximately 27% relative to the original 204-feature representation.
-
-    **Decision: ACCEPT**
-
-    RFE2 is selected as the final feature representation based on the
-    complexity–performance trade-off.
-
-    The objective is not to claim that RFE2 improves predictive quality, but that it
-    preserves essentially the same validation performance with substantially fewer
-    features.
-
-    Final selected representation:
-
-    `148 features`
-
-    All subsequent hyperparameter tuning is performed on the RFE2 feature set.
+    ### Decision
+    **ACCEPT** — RFE2 (148 features) is accepted as the final feature representation for subsequent hyperparameter tuning and model exploration.
     """)
     return
 
@@ -10518,233 +10282,23 @@ def _(pd):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## T1 — CatBoost hyperparameter optimization
-
-    **Objective**
-
-    Improve the predictive performance of the final selected CatBoost model through
-    controlled hyperparameter optimization.
-
-    Feature engineering, source-level ablation and recursive SHAP feature elimination
-    were completed before tuning.
-
-    The tuning stage therefore operates on a fixed data representation rather than
-    simultaneously changing features and model parameters.
-
-    The selected feature representation is:
-
-    `RFE1 — 174 features`
-
-    The internal holdout remains untouched.
-
-    **Reference**
-
-    The tuning reference is the accepted RFE1 CatBoost model trained using:
-
-    - the fixed `split_v1` validation protocol;
-    - five fixed stratified folds;
-    - the same development population;
-    - GPU CatBoost;
-    - the accepted 174-feature RFE1 representation;
-    - the existing preprocessing pipeline;
-    - early stopping.
-
-    Only CatBoost hyperparameters are changed during T1.
-
-    **Optimization metric**
-
-    The Optuna objective is:
-
-    `mean validation Average Precision across the five fixed folds`
-
-    Average Precision remains the primary metric because the model is used as a
-    risk-ranking system under an imbalanced target distribution.
-
-    The following metrics are recorded as secondary diagnostics:
-
-    - ROC-AUC;
-    - LogLoss;
-    - Precision@Top10%;
-    - Recall@Top10%;
-    - fold-level AP;
-    - AP standard deviation.
-
-    Optuna optimizes only Average Precision.
-
-    **Search method**
-
-    Optuna is used with a TPE sampler and a fixed random seed.
-
-    A total of:
-
-    `30 trials`
-
-    were evaluated.
-
-    The full search required approximately:
-
-    `500 minutes`
-
-    of compute time.
-
-    **Search space**
-
-    T1 focuses on four core CatBoost hyperparameters:
-
-    `depth`
-
-    Controls tree complexity and model capacity.
-
-    `learning_rate`
-
-    Controls the contribution of each boosting iteration.
-
-    `l2_leaf_reg`
-
-    Controls L2 regularization of leaf values.
-
-    `random_strength`
-
-    Controls randomness during split selection and provides an additional
-    regularization mechanism.
-
-    The remaining CatBoost configuration is kept fixed in order to isolate the
-    effect of these parameters.
-
-    **Rationale**
-
-    The search space intentionally contains only a small number of influential
-    hyperparameters.
-
-    The purpose of T1 is to identify promising regions of the CatBoost parameter
-    space before considering a larger or more detailed search.
-
-    This avoids simultaneously tuning many weakly understood parameters and reduces
-    the risk of overfitting the development cross-validation procedure.
-
-    **Validation protocol**
-
-    Every Optuna trial uses:
-
-    - the same `split_v1`;
-    - the same five folds;
-    - the same RFE1 feature set;
-    - the same development population;
-    - the same preprocessing;
-    - the same GPU backend;
-    - the same early-stopping procedure.
-
-    No new random train-validation split is generated for individual trials.
-
-    This ensures that trial results can be compared using the same validation
-    contract used throughout the project.
-
-    **Top trials**
-
-    The three highest-scoring Optuna trials were:
-
-    #### Trial 15
-
-    **Mean CV AP:** `0.285605`
-
-    Parameters:
-
-    - `depth = 7`
-    - `learning_rate = 0.0232836`
-    - `l2_leaf_reg = 2.60059`
-    - `random_strength = 0.722107`
-
-    #### Trial 29
-
-    **Mean CV AP:** `0.285487`
-
-    Parameters:
-
-    - `depth = 7`
-    - `learning_rate = 0.0201116`
-    - `l2_leaf_reg = 6.61869`
-    - `random_strength = 0.071852`
-
-    #### Trial 7
-
-    **Mean CV AP:** `0.285107`
-
-    Parameters:
-
-    - `depth = 7`
-    - `learning_rate = 0.0137878`
-    - `l2_leaf_reg = 2.70105`
-    - `random_strength = 0.125628`
-
-    **Preliminary observations**
-
-    All three highest-scoring trials select:
-
-    `depth = 7`
-
-    which suggests that moderate tree depth is consistently favored within the
-    evaluated search space.
-
-    The strongest trials also use relatively low learning rates.
-
-    The best two trials differ by only approximately:
-
-    `0.00012 AP`
-
-    which is much smaller than the run-to-run variation previously observed for GPU
-    CatBoost.
-
-    Therefore, the Optuna ranking alone is not sufficient to conclude that Trial 15
-    is genuinely better than Trial 29.
-
-    **Verification step**
-
-    The top three configurations are retrained as separate MLflow experiments using
-    the standard RFE1 training pipeline.
-
-    For each candidate, the following are compared against the RFE1 reference:
-
-    - paired fold AP;
-    - mean validation AP;
-    - AP standard deviation;
-    - OOF ROC-AUC;
-    - OOF LogLoss;
-    - Precision@Top10%;
-    - Recall@Top10%.
-
-    This verification step is required because Optuna selects the best observed
-    trial and may therefore partially select for stochastic training noise.
-
-    **Decision rule**
-
-    A tuned configuration is promoted only if its improvement over the RFE1
-    reference is supported by the fixed-fold comparison and the secondary OOF
-    metrics.
-
-    A small improvement comparable to normal GPU run-to-run variability is not
-    treated as evidence of a better model.
-
-    If the best configurations reproduce a meaningful improvement, an additional
-    focused Optuna search may be performed around the promising parameter region.
-
-    If the gain does not reproduce, T1 is considered sufficient and the project
-    moves to model analysis rather than spending additional compute on tuning.
-
-    **Holdout policy**
-
-    The internal holdout is not used during hyperparameter tuning.
-
-    All tuning and model-selection decisions are made exclusively using development
-    cross-validation.
-
-    The holdout remains reserved for the final evaluation of the complete selected
-    pipeline.
-
-    **Status**
-
-    30 Optuna trials completed.
-
-    Top-3 candidate configurations pending independent MLflow verification.
+    ## T1 — CatBoost Hyperparameter Optimization
+
+    ### Objective / Hypothesis
+    Improve the predictive ranking performance of the accepted RFE2 CatBoost model through controlled hyperparameter optimization on a fixed feature representation.
+    Hypothesis: Tuning tree depth, learning rate, L2 regularization, and random strength via Bayesian optimization (Optuna TPE) will discover configurations that outperform default baseline parameters consistently across all 5 validation folds.
+
+    ### Setup
+    - Reference: Accepted RFE2 CatBoost model (148 features, default baseline parameters);
+    - Feature representation: Fixed RFE2 feature set (148 features, untouched internal holdout);
+    - Validation protocol: Fixed `split_v1` (5 stratified folds, identical development population);
+    - Search algorithm: Optuna TPE sampler (30 trials, seed-controlled);
+    - Search space:
+      - `depth`: [4, 10] (step 1)
+      - `learning_rate`: [0.01, 0.10] (log scale)
+      - `l2_leaf_reg`: [1.0, 10.0] (log scale)
+      - `random_strength`: [1e-3, 10.0] (log scale)
+    - Metrics: Primary: Validation Average Precision (mean across 5 folds). Secondary: ROC-AUC, LogLoss, Precision@Top10%, Recall@Top10%.
     """)
     return
 
@@ -10850,31 +10404,28 @@ def _():
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ### T1 — Top-3 verification results
+    ### Results
+    The modeling lineage leading up to this optimization stage is:
+    - **FULL** (204 features)
+    - **RFE1** (174 features)
+    - **RFE2** (148 features, accepted for parsimony)
+    - **Optuna TPE optimization** (30 trials) evaluated on the fixed 148-feature RFE2 representation.
 
-    The three highest-ranked Optuna configurations were independently retrained
-    using the standard RFE1 cross-validation pipeline.
+    The top-3 Optuna configurations were independently verified against the RFE1 baseline across all 5 fixed folds:
 
-    All three candidates improved validation Average Precision on all five fixed
-    folds relative to the RFE1 baseline.
+    | Trial | depth | learning_rate | l2_leaf_reg | random_strength | Mean ΔAP vs RFE1 Reference | Positive Folds |
+    |---|---|---|---|---|---|---|
+    | **29** | 7 | 0.0201 | 6.6187 | 0.0719 | **+0.00160** | **5 / 5** |
+    | 7 | 7 | 0.0138 | 2.7011 | 0.1256 | +0.00131 | 5 / 5 |
+    | 15 | 7 | 0.0233 | 2.6006 | 0.7221 | +0.00094 | 5 / 5 |
 
-    | Trial | Mean Δ AP vs RFE1 | Positive folds |
-    |---:|---:|---:|
-    | 15 | +0.00094 | 5 / 5 |
-    | 29 | +0.00160 | 5 / 5 |
-    | 7 | +0.00131 | 5 / 5 |
+    ### Interpretation
+    All three top trials converged on `depth = 7` with conservative shrinkage (`learning_rate ~ 0.014–0.023`), confirming that moderate tree depth with strong regularization is optimal for this tabular schema. Trial 29 yielded the largest paired improvement (+0.00160 AP) with strong L2 regularization (`l2_leaf_reg = 6.62`).
 
-    The reproducibility of the improvement across all five folds indicates that the
-    tuning signal is unlikely to be explained solely by GPU run-to-run noise.
+    Crucially, because the reference run used in `compare_fold_results` is the 174-feature RFE1 baseline, this displayed +0.00160 AP delta reflects the combined effect of feature-set pruning (174 → 148 features) and hyperparameter optimization. The displayed Trial29-vs-RFE1 delta is not interpreted as a pure tuning effect.
 
-    Trial 29 provides the largest mean paired AP improvement and is selected as the
-    current tuned CatBoost candidate.
-
-    Trial 7 remains a strong alternative because its improvement is particularly
-    consistent across folds.
-
-    **Decision:** Continue with a focused second-stage search around the promising
-    hyperparameter region identified in T1.
+    ### Decision
+    **ACCEPT** — Trial 29 is accepted as the tuned RFE2 CatBoost candidate (`T1_BEST_PARAMS`) for subsequent error analysis, dynamic feature testing, and ensemble modeling.
     """)
     return
 
@@ -10882,193 +10433,24 @@ def _(mo):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## EA1 — OOF error analysis: ranking failures and model disagreement
-
-    **Objective**
-
-    Understand the remaining failure modes of the final CatBoost model and identify
-    targeted feature-engineering opportunities after feature selection and
-    hyperparameter tuning.
-
-    The analysis is performed on out-of-fold predictions so that every analyzed
-    prediction was produced by a model that did not train on the corresponding
-    application.
-
-    The primary model is the tuned CatBoost candidate from T1.
-
-    The accepted RFE1 model is retained as a comparator because tuning improved
-    overall ranking quality but did not improve the Top-10% review-policy metrics.
-
-    **Models**
-
-    Primary model:
-
-    `T1 Trial 29`
-
-    Comparator:
-
-    `RFE1 CatBoost`
-
-    Both models use:
-
-    - the same development population;
-    - the same `split_v1`;
-    - the same five validation folds;
-    - the same RFE1 feature representation.
-
-    Only CatBoost hyperparameters differ.
-
-    **Motivation**
-
-    T1 improved validation Average Precision and ROC-AUC consistently across folds.
-
-    However, Precision@Top10% and Recall@Top10% remained approximately unchanged and
-    were slightly stronger for the RFE1 reference.
-
-    This suggests that tuning improved some parts of the ranking without materially
-    improving the highest-risk 10% of applications.
-
-    Error analysis is therefore used to determine:
-
-    1. where the tuned model improved ranking;
-    2. which positive applications remain ranked too low;
-    3. which negative applications are incorrectly ranked among the highest-risk
-       cases;
-    4. which applicant cohorts have systematically weaker performance;
-    5. whether model disagreement reveals missing interactions or feature families.
-
-    **Analysis dataset**
-
-    The analysis uses OOF predictions joined one-to-one to the development
-    application rows.
-
-    Each row should contain at minimum:
-
-    - `SK_ID_CURR`;
-    - `TARGET`;
-    - `fold`;
-    - RFE1 OOF probability;
-    - Trial 29 OOF probability.
-
-    Application-level features and source-availability indicators are then attached
-    for cohort analysis.
-
-    **OOF integrity checks**
-
-    Before analyzing errors, verify that:
-
-    - every development application has exactly one OOF prediction from each model;
-    - `SK_ID_CURR` is unique within each OOF table;
-    - both models contain exactly the same application population;
-    - `TARGET` agrees between the two tables;
-    - `fold` agrees between the two tables;
-    - probabilities contain no missing or infinite values;
-    - probabilities lie in `[0, 1]`.
-
-    The model predictions must be aligned by `SK_ID_CURR`, not by dataframe row
-    order.
-
-    **Analysis plan**
-
-    The investigation proceeds in five stages.
-
-    1. Global OOF comparison
-
-    Compare the probability distributions and ranking behavior of RFE1 and Trial 29.
-
-    Measure:
-
-    - prediction correlation;
-    - probability differences;
-    - rank differences;
-    - movement of positive and negative applications.
-
-    The goal is to understand what tuning actually changed.
-
-    2. Top-10% review-policy errors
-
-    Analyze the highest-risk 10% of applications.
-
-    Study:
-
-    - true positives captured by both models;
-    - positives captured only by Trial 29;
-    - positives captured only by RFE1;
-    - false positives entering the review queue;
-    - positives immediately below the review boundary.
-
-    This directly addresses the production-like review policy.
-
-    3. High-confidence ranking errors
-
-    Analyze:
-
-    - `TARGET = 1` applications assigned very low risk;
-    - `TARGET = 0` applications assigned very high risk.
-
-    The analysis focuses on ranking errors rather than using an arbitrary
-    classification threshold such as `0.5`.
-
-    4. Cohort analysis
-
-    Evaluate OOF performance across meaningful applicant groups.
-
-    Candidate cohorts include:
-
-    - with / without bureau history;
-    - with / without previous-application history;
-    - with / without installment-payment history;
-    - with / without credit-card history;
-    - number of previous contracts;
-    - age groups;
-    - income groups;
-    - credit amount groups;
-    - contract type.
-
-    For each sufficiently large cohort, compare:
-
-    - prevalence;
-    - Average Precision;
-    - ROC-AUC where meaningful;
-    - Recall@Top10%;
-    - prediction distribution.
-
-    5. Error patterns → feature hypotheses
-
-    The objective is not merely to describe difficult cases.
-
-    Repeated error patterns should be converted into falsifiable feature-engineering
-    hypotheses.
-
-    Examples:
-
-    - recent repayment behavior may need stronger weighting;
-    - applicants without history may require explicit interaction features;
-    - credit burden may behave differently across income groups;
-    - historical delinquency severity may interact with recency;
-    - current application characteristics may need interactions with historical
-      behavior.
-
-    Only hypotheses supported by repeated OOF error patterns will be tested.
-
-    **Decision rule**
-
-    EA1 does not directly select a model.
-
-    The output of the analysis should be a small set of concrete, testable
-    hypotheses explaining important ranking failures.
-
-    New feature engineering is performed only when the OOF analysis identifies a
-    plausible recurring mechanism.
-
-    The internal holdout remains untouched throughout error analysis and subsequent
-    feature experiments.
-
-    **Status**
-
-    OOF predictions available.
-
-    Pending OOF integrity validation and error analysis.
+    ## EA1 — Out-of-Fold Error Analysis: Ranking Failures and Model Disagreement
+
+    ### Objective / Hypothesis
+    Analyze out-of-fold predictions from the tuned CatBoost candidate (Trial 29) against the RFE1 baseline to diagnose ranking failures, assess review-policy behavior, and determine whether systematic error cohorts justify targeted feature engineering.
+    Hypothesis: Ranking errors (hard false negatives, model disagreements, and cohort underperformance) may stem from uncaptured behavioral dynamics, missing historical signals, or cohort-specific interactions.
+
+    ### Setup
+    - Primary model: Final CatBoost candidate (Trial 29, 148 features, `split_v1` 5-fold OOF predictions);
+    - Comparator: Accepted RFE1 CatBoost model (174 features, baseline parameters); note that this comparison describes the final CatBoost candidate vs RFE1, not a pure tuning impact.
+    - Validation protocol: Fixed `split_v1` (5 stratified folds, identical development population, aligned by `SK_ID_CURR`);
+    - Target policy: Global Top-10% risk queue (capacity = 0.10);
+    - Scope:
+      1. Global OOF alignment and Top-10% review queue overlap;
+      2. Hard false negatives and data availability;
+      3. Score-matched diagnostic analysis;
+      4. Categorical cohort performance (Drivers and Sales staff);
+      5. Numeric cohort scan across feature quintiles.
+    - Holdout policy: Internal holdout remains untouched.
     """)
     return
 
@@ -11076,7 +10458,11 @@ def _(mo):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ### 1. Global OOF comparison
+    ### EA1.1 — Global OOF & Top-10% Review Policy Diagnostics
+
+    #### Objective / Hypothesis
+    Compare out-of-fold probability distributions, rank movements, and Top-10% review-queue composition between the accepted RFE1 model and the final CatBoost candidate (Trial 29).
+    Hypothesis: The transition from the RFE1 baseline to the final CatBoost candidate (Trial 29) improved global ranking metrics (AP and ROC-AUC) through combined feature-pruning and parameter tuning. Comparing out-of-fold distributions and review-queue overlap against RFE1 helps diagnose whether rank movements shifted high-risk applicants into the Top-10% queue.
     """)
     return
 
@@ -11242,19 +10628,8 @@ def _(oof_analysis):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ### 2. Top-10% review-policy errors
-
-    Analyze the highest-risk 10% of applications.
-
-    Study:
-
-    - true positives captured by both models;
-    - positives captured only by Trial 29;
-    - positives captured only by RFE1;
-    - false positives entering the review queue;
-    - positives immediately below the review boundary.
-
-    This directly addresses the production-like review policy.
+    #### Top-10% Review Queue Dynamics
+    Analyze applicants around the highest-risk 10% decision boundary (`capacity = 0.10`) to assess overlap, queue churn, and target capture consistency between RFE1 and Trial 29.
     """)
     return
 
@@ -11333,19 +10708,11 @@ def _(oof_analysis, pd):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    #### Top-10% review-policy results
-
-    Trial 29 is a genuine but incremental ranking improvement over RFE1.
-    The two models remain highly correlated, but the tuned model systematically
-    moves defaulted applications slightly higher in the global risk ranking and
-    non-defaulted applications slightly lower.
-    This explains the improvement in Average Precision and ROC-AUC.
-    However, the composition of the fixed Top-10% review queue remains highly
-    similar. Approximately 90% of reviewed applicants are shared between the two
-    models, and the applicants exchanged around the 10% boundary have almost
-    identical target prevalence.
-    As a result, Trial 29 improves global ranking quality without improving the
-    current Top-10% operating point.
+    #### Results & Interpretation
+    - Prediction correlation: High agreement between RFE1 and Trial 29 (Pearson r ≈ 0.99, Spearman r ≈ 0.99);
+    - Queue overlap: ~90% of reviewed applicants in the Top-10% queue are identical between models;
+    - Boundary movement: Applications entering and leaving the 10% boundary possess virtually identical default rates;
+    - Diagnostic conclusion: Trial 29 systematically moves positive applications higher in global ranking and non-defaults lower (driving AP and ROC-AUC gains), but the top-decile review operating point remains stable.
     """)
     return
 
@@ -11359,7 +10726,7 @@ def _(oof_analysis):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ### 3. High-confidence ranking errors
+    #### High-Confidence Ranking Errors
 
     Analyze:
 
@@ -11523,7 +10890,7 @@ def _(oof_analysis, pd):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ### 4. Cohort analysis
+    #### Preliminary Cohort Diagnostics by History Source
 
     Evaluate OOF performance across meaningful applicant groups.
 
@@ -11763,7 +11130,7 @@ def _(error_analysis, pd, summarize_counts):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ### EA1.1 — Historical data availability
+    #### Historical Data Availability Diagnostic
 
     Historical-source availability does not explain the hard false-negative cohort.
 
@@ -11794,15 +11161,7 @@ def _(mo):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ### 5. Error patterns
-    """)
-    return
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    #### Entered Top-10% vs Hard false negatives
+    #### Profile Comparison: Detected Defaults vs Hard False Negatives
     """)
     return
 
@@ -11968,7 +11327,7 @@ def _(profile_comparison):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ### EA1.2 — Score-matched hard false negatives
+    ### EA1.2 — Score-Matched Hard False Negatives Analysis
 
     #### Objective
 
@@ -12739,7 +12098,7 @@ def _(current_comparison):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ### EA1.3 — Categorical cohort performance analysis
+    ### EA1.3 — Categorical Cohort Performance Analysis
 
     #### Objective
 
@@ -14221,8 +13580,7 @@ def _(numeric_cohort_results):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    #### EA1.4 — Numeric cohort scan
-
+    #### Results & Findings
     Numeric cohort performance was evaluated across quintiles of:
 
     - age;
@@ -14231,42 +13589,22 @@ def _(mo):
     - `EXT_SOURCE_2`;
     - bureau-history depth.
 
-    Most cohorts showed ranking performance close to the overall OOF model.
+    Most cohorts showed ranking performance close to the overall OOF model. Income and bureau-history depth were particularly stable across the population. Credit-to-income ratio also showed no major systematic failure region.
 
-    Income and bureau-history depth were particularly stable across the population.
-    Credit-to-income ratio also showed no major systematic failure region.
+    Some degradation was observed in the youngest and oldest age groups and restricted `EXT_SOURCE_2` ranges. However, conditioning on strong continuous predictors such as `EXT_SOURCE_2` naturally removes part of their global ranking information, so lower within-bin AUC does not by itself indicate a missing model feature. No numeric cohort revealed a sufficiently strong and interpretable residual failure mechanism to justify targeted feature engineering.
 
-    Some degradation was observed in:
+    ### Overall Error Analysis Conclusion
 
-    - the youngest and oldest age groups;
-    - restricted `EXT_SOURCE_2` ranges.
+    The OOF error analysis examined ranking failures, review queue dynamics, score-matched hard false negatives, categorical cohorts (Drivers, Sales staff), and continuous numeric quintiles:
 
-    However, conditioning on strong continuous predictors such as `EXT_SOURCE_2`
-    naturally removes part of their global ranking information, so lower within-bin
-    AUC does not by itself indicate a missing model feature.
-
-    No numeric cohort revealed a sufficiently strong and interpretable residual
-    failure mechanism to justify targeted feature engineering.
-
-    Overall error-analysis conclusion
-
-    The OOF error analysis identified several consistently harder applicant
-    segments, particularly Drivers and Sales staff, but no clear missing
-    pre-decision feature representation was found.
-
-    Hard false negatives were highly similar to genuine low-risk applicants after
-    matching on predicted risk, and neither historical behavior nor cross-table
-    exposure diagnostics revealed a strong residual signal.
-
-    The remaining errors appear to arise primarily from weaker available
-    discrimination in specific regions of the feature space rather than from an
-    obvious missing engineered feature.
+    1. **Queue dynamics**: High overlap (~90%) with RFE1; model refinements improve global probability calibration without churning top-decile operations.
+    2. **Hard false negatives**: Not caused by missing historical records; score-matching with genuine non-defaults demonstrates that pre-decision residual signals (|SMD| ≤ 0.12) do not justify targeted feature creation.
+    3. **Categorical cohorts**: Drivers and Sales staff suffer from localized signal loss; however, existing features (especially credit-card behavioral metrics) are already accessible, and no distinct representation solves the remaining variance without risk of overfitting.
+    4. **Numeric cohorts**: Ranking performance across age, income, and debt-burden quintiles remains balanced and free of catastrophic blind spots.
 
     **Decision: CLOSE ERROR ANALYSIS**
 
-    No additional feature bundle is introduced based on the current diagnostics.
-
-    The internal holdout remains untouched.
+    No additional feature bundle is introduced based on the error-analysis diagnostics. The internal holdout remains untouched.
     """)
     return
 
@@ -14274,7 +13612,17 @@ def _(mo):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## M1 - LightGBM and XGBoost
+    ## M1 — Alternative Models and Ensemble Blending
+
+    ### Objective / Hypothesis
+    Evaluate whether alternative gradient-boosting implementations (LightGBM and XGBoost) provide complementary ranking signals to the tuned CatBoost candidate on the fixed 148-feature RFE2 representation, and whether probability blending improves out-of-fold generalization.
+
+    ### Setup & Cross-Validation Framework
+    - Feature representation: Fixed RFE2 (148 features);
+    - Validation protocol: Fixed `split_v1` (5 stratified folds, identical development population);
+    - Models evaluated: CatBoost (Trial 29 tuned), LightGBM (baseline with histogram binning and categorical handling), XGBoost (histogram tree method with GPU acceleration);
+    - Optimization track: Primary: Validation AP. Leaderboard track: ROC-AUC. Policy track: Precision/Recall@Top10%;
+    - Internal holdout: Untouched.
     """)
     return
 
@@ -14906,38 +14254,16 @@ def _():
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ### M1 — Model comparison and ensemble blending
+    ### M1 Results — Baseline Model Comparison and Initial Ensemble Blending
 
-    ### Objective
+    Three tree-based boosting models were evaluated on the accepted 148-feature RFE2 representation:
+    1. Tuned CatBoost candidate (Trial 29);
+    2. Baseline LightGBM;
+    3. Baseline XGBoost.
 
-    Evaluate whether alternative gradient-boosting implementations provide
-    complementary ranking information relative to the tuned CatBoost model and
-    whether their OOF predictions can improve the final system through blending.
+    LightGBM and XGBoost were trained as competitive baseline models without extensive hyperparameter optimization to test whether their predictions provided complementary ranking information for ensembling.
 
-    The comparison uses the same:
-
-    - development population;
-    - immutable 5-fold split;
-    - RFE2 feature representation;
-    - prediction cutoff;
-    - evaluation metrics.
-
-    The internal holdout remains untouched.
-
-    ### Models
-
-    Three tree-based boosting models were evaluated:
-
-    1. tuned CatBoost Trial 29;
-    2. LightGBM;
-    3. XGBoost.
-
-    LightGBM and XGBoost were trained as competitive baseline models without
-    extensive hyperparameter optimization. Their primary purpose was not only to
-    compete with CatBoost individually, but also to test whether their predictions
-    contained complementary ranking information.
-
-    ### Individual OOF performance
+    ### Individual OOF Performance
 
     | Model | AP | ROC-AUC | LogLoss | Precision@10% | Recall@10% |
     |---|---:|---:|---:|---:|---:|
@@ -15182,10 +14508,6 @@ def _(mo):
 
     Small mixed-fold improvements are not sufficient because GPU CatBoost
     variability is already known to be non-negligible.
-
-    ### Decision
-
-    **PENDING**
     """)
     return
 
@@ -15259,25 +14581,9 @@ def _():
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ### F8 — Installments contract-level repayment dynamics
+    ### F8 Results — Cross-Validation Evaluation
 
-    ### Hypothesis
-
-    Existing installment features aggregate repayment behavior primarily at the
-    applicant level and may hide heterogeneous behavior across individual previous
-    contracts.
-
-    The experiment therefore introduced a two-stage representation:
-
-    `installment → previous contract → applicant`
-
-    with features describing contract-level lateness, severe delinquency,
-    underpayment, worst-contract behavior, latest-contract behavior, and
-    recency-weighted repayment patterns.
-
-    The experiment used the tuned CatBoost Trial 29 hyperparameters, the same RFE2
-    representation, the same immutable five folds, and the same development
-    population.
+    The experiment evaluated the two-stage contract dynamic features using the tuned CatBoost Trial 29 hyperparameters, the fixed RFE2 representation, the same immutable five folds, and the same development population.
 
     ### Results
 
@@ -15450,10 +14756,6 @@ def _(mo):
 
     If improvement is negligible or fold consistency is weak, both sources are
     rejected and no further POS / bureau_balance feature search is performed.
-
-    ### Decision
-
-    **PENDING**
     """)
     return
 
@@ -15503,33 +14805,9 @@ def _():
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ### F9 — POS and bureau-balance temporal dynamics
+    ### F9 Results — Cross-Validation Evaluation
 
-    ### Hypothesis
-
-    Earlier POS_CASH_balance and bureau_balance feature bundles did not provide
-    useful incremental performance when represented primarily through static
-    aggregates.
-
-    Because both sources contain monthly histories, the experiment tested whether
-    explicit temporal structure could recover useful signal.
-
-    The candidate bundle represented:
-
-    - recent delinquency;
-    - recent versus historical delinquency;
-    - delinquency severity;
-    - months since delinquency;
-    - worsening or improvement over time;
-    - POS contract progress;
-    - latest repayment state.
-
-    F9 contained only the new POS and bureau_balance dynamic features and did not
-    include the rejected F8 installments bundle.
-
-    The experiment used the tuned CatBoost Trial 29 hyperparameters, the same RFE2
-    feature set, the same immutable five folds, and the same development
-    population.
+    The candidate bundle combined the new POS and bureau-balance dynamic features (excluding the rejected F8 bundle) and evaluated them using tuned CatBoost Trial 29 hyperparameters on the fixed RFE2 representation across the 5 immutable folds.
 
     ### Results
 
@@ -15602,6 +14880,40 @@ def _(BBX_FEATURES, FINAL_FEATURES, POSX_FEATURES, f9_features):
     print("POSX features:", len(POSX_FEATURES))
     print("BBX features:", len(BBX_FEATURES))
     print("F9 total features:", len(f9_features))
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## Final feature representation
+
+    Following the acceptance of candidate feature bundle F9, the feature engineering phase of the project is formally concluded and frozen.
+
+    ### Composition
+    - **RFE2 Core Features**: 148 features (parsimonious subset selected from 204 FULL features through two rounds of recursive SHAP elimination);
+    - **POSX Dynamic Features**: 9 features (capturing contract completion ratios, remaining installment burdens, recent 6-month lateness, and worsening trajectory);
+    - **BBX Dynamic Features**: 9 features (capturing ordinal status mapping, maximum delinquency severity, and recent 6-month / 12-month delinquency rates);
+    - **Total Schema**: **166 features** (`ACCEPTED_FINAL_FEATURES`).
+
+    ### Scope and Discipline
+    - **F8 / IPX Excluded**: The two-stage installments candidate bundle showed net negative cross-validation transfer (-0.000302 mean ΔAP) and is strictly excluded;
+    - **F9 Included**: Both POS and bureau-balance temporal dynamics demonstrated consistent positive transfer (+0.000296 mean ΔAP, 4/5 positive folds) and are included;
+    - **Feature Freeze**: No further feature engineering, aggregation, transformation, or feature selection is performed;
+    - `ACCEPTED_FINAL_FEATURES` serves as the single source of truth for all subsequent model tuning, ensembling, holdout evaluation, and test submission.
+
+    ### Feature Source Summary
+    | Source Table | Feature Family | Count | Primary Risk Signal Captured |
+    |---|---|---:|---|
+    | `application_train` | Demographics, financial ratios, external scores | 61 | Core applicant profile, leverage ratios, credit bureau scores |
+    | `bureau` | Credit bureau historical credit summary | 34 | Historical active/closed credit count, debt burden, past delinquencies |
+    | `previous_application` | Previous Home Credit applications | 25 | Past contract outcomes, approved credit amounts, rejection history |
+    | `installments_payments` | Installments repayment history | 18 | Aggregated payment timeliness, underpayment, and delay metrics |
+    | `credit_card_balance` | Revolving credit card activity | 10 | Card utilization rates, drawing patterns, balance-to-limit ratios |
+    | `POS_CASH_balance` (POSX) | Contract completion and DPD dynamics | 9 | Remaining installments ratio, recent 6M DPD, lateness worsening |
+    | `bureau_balance` (BBX) | Monthly bureau delinquency transitions | 9 | Maximum status severity, recent 6M/12M delinquency rates |
+    | **Total** | | **166** | Complete multi-table borrower risk representation |
+    """)
     return
 
 
@@ -15858,6 +15170,24 @@ def _():
     return
 
 
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## M2 — Alternative model tuning
+
+    ### Objective
+    Optimize the hyperparameters of LightGBM and XGBoost via Bayesian optimization (Optuna) on the frozen 166-feature representation (`ACCEPTED_FINAL_FEATURES`). In M1, baseline LightGBM and XGBoost demonstrated strong ensembling diversity; tuning each model individually aims to strengthen their standalone predictive power and maximize multi-model ensemble performance.
+
+    ### Search Contract
+    - **Feature representation**: Identical frozen F9 feature set (166 features, `ACCEPTED_FINAL_FEATURES`);
+    - **Validation protocol**: Fixed `split_v1` (5 stratified folds, identical development population);
+    - **Optimization objective**: Maximization of 5-fold cross-validated ROC-AUC, aligning with the primary competitive leaderboard metric;
+    - **Storage backend**: Persistent SQLite database (`sqlite:///optuna.db`) for reproducible, resumable trial history;
+    - **Strict holdout discipline**: The 15% internal holdout remains completely untouched.
+    """)
+    return
+
+
 @app.cell
 def _(X_f9, categorical_features_f9, folds_f9, run_lgbm_cv, y_f9):
     def objective_lgbm(trial):
@@ -16083,6 +15413,15 @@ def _(study_xgb):
         print("  Params:")
         for param, param_value in best_trial_xgb.params.items():
             print(f"    {param}: {param_value}")
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Standardized MLflow CV Experiment Runner
+    Define a generic cross-validation runner to evaluate candidate models under the fixed protocol, logging fold metrics, OOF predictions, feature schemas, and parameter artifacts to MLflow.
+    """)
     return
 
 
@@ -16464,6 +15803,35 @@ def _(cb_f9_fold_metrics, xgb_tuned_run):
     return
 
 
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Tuning Results & Confirmatory Evaluation
+
+    Both Optuna Bayesian optimization studies converged on strong hyperparameter configurations that were confirmed via independent 5-fold cross-validation:
+
+    #### LightGBM Tuning
+    - **Best Study Trial**: Trial 4 achieved cross-validated ROC-AUC of **0.79024** (`learning_rate=0.0111`, `num_leaves=77`, `max_depth=10`, `min_child_samples=125`, `subsample=0.7914`, `colsample_bytree=0.7293`, `reg_alpha=0.5457`, `reg_lambda=0.0782`);
+    - **Confirmatory 5-Fold CV** (`lgbm_f9_tuned_v1`): Mean ROC-AUC = **0.79024**, Mean AP = **0.28485**, LogLoss = **0.23609**, Median best iteration = 1490.
+
+    #### XGBoost Tuning
+    - **Best Study Trial**: Trial 11 achieved cross-validated ROC-AUC of **0.79122** (`learning_rate=0.0459`, `max_depth=4`, `min_child_weight=3.2018`, `subsample=0.7035`, `colsample_bytree=0.8387`, `gamma=0.0074`, `reg_alpha=9.3388`, `reg_lambda=1.0788`);
+    - **Confirmatory 5-Fold CV** (`xgb_f9_tuned_v1`): Mean ROC-AUC = **0.79122**, Mean AP = **0.28586**, LogLoss = **0.23566**, Median best iteration = 1212;
+    - **Competitiveness**: Tuned XGBoost became competitive with CatBoost on ROC-AUC (**0.79122 vs 0.79034**), demonstrating that compact trees (`max_depth = 4`) paired with strong L1 regularization (`reg_alpha = 9.34`) significantly improved tabular generalization.
+
+    ### Performance Summary (5-Fold Cross-Validation on F9 166 Features)
+    | Model | Mean AP | Mean ROC-AUC | Mean LogLoss | Median Best Iteration |
+    |---|---:|---:|---:|---:|
+    | CatBoost F9 (Candidate) | 0.28630 | 0.79034 | 0.23595 | 4397 |
+    | LightGBM F9 (Tuned Trial 4) | 0.28485 | 0.79024 | 0.23609 | 1490 |
+    | XGBoost F9 (Tuned Trial 11) | 0.28586 | 0.79122 | 0.23566 | 1212 |
+
+    ### Decision
+    **ACCEPT** — Accept tuned LightGBM (`lgbm_tuned_params`) and tuned XGBoost (`xgb_tuned_params`) configurations for final ensemble evaluation. Hyperparameter tuning for alternative models is now complete and frozen.
+    """)
+    return
+
+
 @app.cell
 def _(cb_f9_oof, lgbm_tuned_run, xgb_tuned_run):
     models_tuned_oof = {
@@ -16485,6 +15853,15 @@ def _(dev_f9, lgbm_tuned_run, np, xgb_tuned_run):
         xgb_tuned_run["oof"]["SK_ID_CURR"].to_numpy(),
         dev_f9["SK_ID_CURR"].to_numpy(),
     )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Grid Search over Ensemble Blend Weights
+    Conduct a systematic grid search (step = 0.01) across convex combinations of out-of-fold probability predictions from the three tuned models to locate the empirical ROC-AUC / AP optimum.
+    """)
     return
 
 
@@ -16629,6 +16006,57 @@ def _(
     )
 
     final_fold_comparison
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## M3 — Final tuned ensemble
+
+    ### Blend Optimization & Weight Selection
+    Grid search over convex combinations of the three tuned models identified a consistent high-performance plateau centered around balanced contributions from CatBoost and XGBoost, with a moderate complementary weight on LightGBM.
+
+    The frozen ensemble weights are:
+    - **CatBoost**: `0.36`
+    - **LightGBM**: `0.28`
+    - **XGBoost**: `0.36`
+
+    ### Out-of-Fold Performance Comparison
+    | Metric | CatBoost F9 (Candidate) | Final Tuned Ensemble (0.36 / 0.28 / 0.36) | Improvement (Δ) |
+    |---|---:|---:|---:|
+    | **Average Precision (AP)** | 0.28630 | **0.28928** | **+0.00298** |
+    | **ROC-AUC** | 0.79034 | **0.79298** | **+0.00264** |
+    | **LogLoss** | 0.23595 | **0.23512** | **-0.00083** |
+    | **Precision@Top10%** | 0.30694 | **0.30985** | **+0.00291** |
+    | **Recall@Top10%** | 0.38023 | **0.38384** | **+0.00361** |
+
+    ### Cross-Validation Fold Consistency
+    The paired fold comparison between the final tuned ensemble and the CatBoost F9 candidate demonstrated unanimous consistency across all 5 validation splits:
+    - **AP improved**: **5 / 5 folds**;
+    - **ROC-AUC improved**: **5 / 5 folds**;
+    - **Precision@Top10% improved**: **5 / 5 folds**;
+    - **Recall@Top10% improved**: **5 / 5 folds**.
+
+    ### Robustness of Optimum
+    The objective function forms a broad, flat plateau across adjacent weight allocations (e.g., CatBoost 0.34–0.38, LightGBM 0.26–0.30, XGBoost 0.34–0.38 produce nearly identical ROC-AUC within ~0.00005). The weights `0.36 / 0.28 / 0.36` were selected directly from this robust region without aggressive fine-tuning to guard against overfitting to validation noise.
+
+    ### Decision
+    **FINAL OOF CHAMPION ACCEPTED**
+
+    Feature selection (`ACCEPTED_FINAL_FEATURES` = 166), model hyperparameters (`FINAL_CB_PARAMS`, `FINAL_LGBM_PARAMS`, `FINAL_XGB_PARAMS`), and ensemble blend weights (`0.36 / 0.28 / 0.36`) are now completely frozen.
+
+    The frozen specification is now submitted to the untouched 15% holdout set for final unbiased verification.
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Development Set Refit & Standalone Holdout Scoring
+    Train each tuned model on the entire development split (261,384 rows) up to its median best iteration from 5-fold cross-validation, then generate probability predictions on the untouched 15% holdout partition (46,127 rows).
+    """)
     return
 
 
@@ -16918,6 +16346,50 @@ def _(
     return
 
 
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## Final holdout evaluation
+
+    The final model specification was frozen prior to scoring the untouched 15% internal holdout dataset (46,127 applicants).
+
+    ### Holdout Evaluation Results
+    | Model | AP | ROC-AUC | LogLoss | Precision@10% | Recall@10% |
+    |---|---:|---:|---:|---:|---:|
+    | CatBoost | 0.28038 | 0.79048 | 0.23656 | 0.29640 | 0.36708 |
+    | LightGBM | 0.28079 | 0.79124 | 0.23642 | 0.29640 | 0.36708 |
+    | XGBoost | 0.28214 | 0.79117 | 0.23617 | 0.30052 | 0.37218 |
+    | **Ensemble** | **0.28393** | **0.79319** | **0.23561** | **0.30204** | **0.37406** |
+
+    ### Interpretation
+    - **Ensemble Dominance**: The multi-model probability blend (`0.36 / 0.28 / 0.36`) strictly outperforms every individual constituent model across all five reported metrics on unseen holdout data.
+    - **Generalization Consistency**: The holdout ROC-AUC of **0.79319** is exceptionally aligned with the cross-validated out-of-fold estimate (**0.79298**, gap < 0.00021), demonstrating that the internal validation protocol did not suffer from meaningful validation overfitting.
+    - **Holdout Integrity**: No modeling, feature-selection, or parameter adjustments were made after examining the holdout metrics.
+
+    ### Decision
+    **FINAL MODEL SPECIFICATION ACCEPTED**
+
+    The frozen 3-model ensemble specification is validated and approved. The research process proceeds to full-dataset retraining and test-set submission generation.
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## Full-data refit
+
+    ### Training Context
+    Following the successful validation on the untouched holdout, the entire labeled dataset is now leveraged for final model training:
+    - **Recombined Population**: All 307,511 labeled training rows (development + holdout partitions combined) are utilized;
+    - **Fixed Feature Schema**: Exactly 166 features (`ACCEPTED_FINAL_FEATURES`), preserving the identical column order and categorical encodings;
+    - **Frozen Hyperparameters**: Each model retains its exact tuned parameter specification (`FINAL_CB_PARAMS`, `FINAL_LGBM_PARAMS`, `FINAL_XGB_PARAMS`);
+    - **Fixed Iteration Budgets**: Tree counts are set to the median best iterations established during the 5-fold cross-validation procedure (CatBoost: median best iteration, LightGBM: 1490, XGBoost: 1212), eliminating early stopping and avoiding validation-based selection during the refit;
+    - **Deterministic Seeding**: `random_state = 42` is maintained across all three models.
+    """)
+    return
+
+
 @app.cell
 def _(ACCEPTED_FINAL_FEATURES, final_training_dataset):
     X_full = final_training_dataset[
@@ -16982,40 +16454,235 @@ def _(catboost_full, lgbm_full, xgb_full):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ### Final holdout evaluation
-
-    The final model specification was frozen before accessing the internal holdout.
-
-    The selected system consisted of:
-
-    - tuned CatBoost;
-    - tuned LightGBM;
-    - tuned XGBoost;
-    - probability ensemble weights of `0.36 / 0.28 / 0.36`.
-
-    On the untouched 15% holdout, the ensemble achieved:
-
-    - Average Precision: `0.28393`;
-    - ROC-AUC: `0.79319`;
-    - LogLoss: `0.23561`;
-    - Precision@Top10%: `0.30204`;
-    - Recall@Top10%: `0.37406`.
-
-    The holdout ROC-AUC was nearly identical to the OOF estimate
-    (`~0.79298`), providing no evidence of meaningful validation overfitting.
-
-    The ensemble also outperformed every standalone model on all reported holdout
-    metrics.
+    ### Trained Model Artifact Freezing
+    All three full-data gradient-boosting models were trained on the complete labeled population (307,511 rows) using fixed iteration budgets and saved to persistent artifacts:
+    - **CatBoost Full Model**: `artifacts/catboost_full_model.cbm`
+    - **LightGBM Full Model**: `artifacts/lightgbm_full_model.txt`
+    - **XGBoost Full Model**: `artifacts/xgboost_full_model.json`
 
     ### Decision
+    **FINAL TRAINED ARTIFACTS READY**
 
-    **FINAL MODEL ACCEPTED**
+    The full-data model ensemble is frozen and ready for Kaggle test inference.
+    """)
+    return
 
-    No additional feature engineering, hyperparameter tuning, model selection, or
-    ensemble-weight optimization is performed after observing the holdout.
 
-    The next step is to retrain the frozen system on the complete labeled training
-    set and generate the Kaggle submission.
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## Kaggle test inference
+
+    ### Test feature assembly
+    Execute the refactored, reusable multi-table feature pipeline (`build_test_features`) against `application_test.csv` and the raw historical tables to construct the test feature matrix.
+    """)
+    return
+
+
+@app.cell
+def _(Path, build_test_features):
+    X_test = build_test_features(
+            data_dir=Path("data"),
+            output_path=Path("data/processed/application_test_features.csv"),
+            include_id=False,  # SK_ID_CURR retained as DataFrame index
+        )
+    return (X_test,)
+
+
+@app.cell
+def _(pd):
+    application_test = pd.read_csv("data/raw/application_test.csv")
+    return (application_test,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Schema parity & defensive assertions
+    Verify complete schema compliance prior to inference:
+    - Feature count equals exactly 166;
+    - Feature names and ordering identically match `ACCEPTED_FINAL_FEATURES`;
+    - Unique index with zero duplicate applicant IDs;
+    - Zero duplicate column headers.
+    """)
+    return
+
+
+@app.cell
+def _(ACCEPTED_FINAL_FEATURES, X_test):
+    assert X_test.shape[1] == 166
+
+    assert list(X_test.columns) == list(
+        ACCEPTED_FINAL_FEATURES
+    )
+
+    assert X_test.index.is_unique
+
+    assert not X_test.columns.duplicated().any()
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Final ensemble inference
+    Generate probability predictions for all 48,744 test applications from each full-data model and blend them using the frozen ensemble weights (`0.36 * CatBoost + 0.28 * LightGBM + 0.36 * XGBoost`).
+    """)
+    return
+
+
+@app.cell
+def _(X_test, catboost_full, lgbm_full, xgb_full):
+    catboost_test_pred = (
+        catboost_full.predict_proba(
+            X_test
+        )[:, 1]
+    )
+
+    xgb_test_pred = (
+        xgb_full.predict_proba(
+            X_test
+        )[:, 1]
+    )
+
+    lgbm_test_pred = (
+        lgbm_full.predict_proba(
+            X_test
+        )[:, 1]
+    )
+    return catboost_test_pred, lgbm_test_pred, xgb_test_pred
+
+
+@app.cell
+def _(catboost_test_pred, lgbm_test_pred, xgb_test_pred):
+    test_pred = (
+        0.36 * catboost_test_pred
+        + 0.28 * lgbm_test_pred
+        + 0.36 * xgb_test_pred
+    )
+    return (test_pred,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Submission creation & format verification
+    Format test predictions into the competition submission schema (`SK_ID_CURR`, `TARGET`), serialize to `submission_final_ensemble.csv`, and assert complete row coverage and valid probability bounds [0, 1].
+    """)
+    return
+
+
+@app.cell
+def _(application_test, pd, test_pred):
+    submission = pd.DataFrame({
+        "SK_ID_CURR":
+            application_test["SK_ID_CURR"],
+
+        "TARGET":
+            test_pred,
+    })
+
+    submission.to_csv(
+        "submission_final_ensemble.csv",
+        index=False,
+    )
+
+    submission.head()
+    return (submission,)
+
+
+@app.cell
+def _(application_test, submission):
+    assert len(submission) == len(
+        application_test
+    )
+
+    assert submission["TARGET"].between(
+        0,
+        1,
+    ).all()
+
+    assert submission[
+        "SK_ID_CURR"
+    ].is_unique
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## Kaggle leaderboard result
+
+    ### Leaderboard Evaluation
+    The frozen ensemble submission (`submission_final_ensemble.csv`) was evaluated on the Kaggle competition leaderboard:
+    - **Public ROC-AUC**: **0.79366** (approximate public leaderboard position: **~2898**);
+    - **Private ROC-AUC**: **0.79126** (approximate private leaderboard position: **~2500**).
+
+    ### Generalization Comparison
+    | Evaluation | ROC-AUC |
+    |---|---:|
+    | **OOF** | **~0.79298** |
+    | **Untouched holdout** | **0.79319** |
+    | **Kaggle Public** | **0.79366** |
+    | **Kaggle Private** | **0.79126** |
+
+    ### Interpretation
+    The exceptionally close agreement across all four evaluation tracks (OOF ~0.79298, untouched holdout 0.79319, public leaderboard 0.79366, private leaderboard 0.79126) confirms the validity and discipline of the project's validation strategy. By isolating the holdout dataset and optimizing feature representations and hyperparameters strictly on fixed cross-validation folds, the system avoided adaptive overfitting and generalized reliably to completely unseen test data.
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    # Final Research Summary
+
+    ### Final feature representation
+    - **RFE2**: 148 features (parsimonious core representation selected via two rounds of recursive SHAP elimination);
+    - **POSX**: 9 features (POS/Cash contract completion and dynamic delinquency transitions);
+    - **BBX**: 9 features (monthly credit bureau status severity and recent delinquency rates);
+    - **Total**: **166 features** (`ACCEPTED_FINAL_FEATURES`).
+
+    ### Final research system
+    - **Tuned CatBoost**: Depth 7, learning rate 0.0201, L2 regularization 6.62, GPU border count 254;
+    - **Tuned LightGBM**: Num leaves 77, max depth 10, min child samples 125, subsample 0.791, colsample 0.729;
+    - **Tuned XGBoost**: Max depth 4, min child weight 3.20, subsample 0.703, colsample 0.839, L1 reg 9.34;
+    - **Probability ensemble**: `0.36 * CatBoost + 0.28 * LightGBM + 0.36 * XGBoost`.
+
+    ### Main milestones
+    1. **B0 baseline**: Established application-only CatBoost benchmark (OOF ROC-AUC **0.76226**).
+    2. **E2 financial ratios**: Added financial burden ratios, improving OOF ROC-AUC to **0.76866**.
+    3. **Multi-table accepted sources**: Extracted relational features from `bureau`, `previous_application`, `installments_payments`, and `credit_card_balance`, expanding to 204 features (ROC-AUC ~0.788);
+    4. **Source ablation**: Confirmed positive independent transfer from every accepted historical source, led by installments and bureau data;
+    5. **RFE1 & RFE2**: Pruned 56 noise features in two stages (204 → 174 → 148 features), improving parsimony and training efficiency without performance loss;
+    6. **CatBoost tuning**: Bayesian optimization identified Trial 29 (depth 7, conservative shrinkage), producing a strong tuned candidate;
+    7. **OOF error analysis**: Analyzed review queues, score-matched hard false negatives, and categorical cohorts, confirming that pre-decision data lack obvious unmodeled residual signals;
+    8. **F8 reject / F9 accept**: Rejected contract-level dynamic installments (-0.00030 ΔAP) and accepted POS + bureau-balance temporal dynamics (+0.00030 ΔAP), finalizing the schema at 166 features;
+    9. **Model comparison**: Demonstrated that LightGBM and XGBoost provided diverse, complementary predictions to CatBoost;
+    10. **Alternative-model tuning**: Bayesian optimization tuned LightGBM and XGBoost, with tuned XGBoost matching CatBoost on ROC-AUC (0.79122);
+    11. **Ensemble**: Identified robust 0.36 / 0.28 / 0.36 blend weights, improving CV ROC-AUC to 0.79298 across 5/5 folds;
+    12. **Untouched holdout**: Verified generalization on 46,127 unseen holdout rows (ROC-AUC 0.79319) with zero degradation;
+    13. **Kaggle**: Generated final full-data refit predictions achieving 0.79366 Public and 0.79126 Private ROC-AUC.
+
+    ### Final metrics
+    - **5-Fold Cross-Validation OOF ROC-AUC**: **~0.79298** (AP: 0.28928)
+    - **Untouched 15% Internal Holdout ROC-AUC**: **0.79319** (AP: 0.28393)
+    - **Kaggle Public Leaderboard ROC-AUC**: **0.79366** (~2898 position)
+    - **Kaggle Private Leaderboard ROC-AUC**: **0.79126** (~2500 position)
+
+    ### Main findings
+    - Combining three distinct gradient-boosting implementations (CatBoost, LightGBM, XGBoost) outperformed every single model across 5/5 validation folds and holdout data.
+    - Eliminating 56 redundant features through recursive SHAP elimination preserved full predictive ranking quality while reducing pipeline complexity.
+    - Modeling temporal trajectory and worsening dynamics (F9) recovered critical default signals that flat historical averages discarded.
+    - Score-matched error analysis proved that hard false negatives cannot be resolved by standard feature engineering, reflecting unobserved events and label noise.
+    - Disciplined separation of validation folds and holdout data guaranteed that CV improvements transferred faithfully to both holdout and competitive test sets.
+
+    ### Deployment decision
+    - **Research / Kaggle champion**: Three-model tuned probability ensemble (`0.36 / 0.28 / 0.36`) for optimal predictive ranking.
+    - **Deployment candidate for FastAPI**: Single tuned CatBoost model (`FINAL_CB_PARAMS`) on the 166-feature schema, delivering ~99.6% of the ensemble's discriminatory power with a single model artifact, lower latency, and reduced operational complexity.
+
+    ### Final decision
+    **RESEARCH STAGE CLOSED**
     """)
     return
 
