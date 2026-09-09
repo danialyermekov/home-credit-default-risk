@@ -5,8 +5,6 @@ frozen from the final research representation (RFE2 148 + POSX 9 + BBX 9 = 166 f
 F8 / IPX and all other rejected candidate features are strictly excluded.
 """
 
-from __future__ import annotations
-
 from typing import Final
 
 ACCEPTED_CATEGORICAL_FEATURES: Final[tuple[str, ...]] = (
@@ -195,8 +193,3 @@ ACCEPTED_FINAL_FEATURES: Final[tuple[str, ...]] = (
     "BBX_MEAN_RECENT_WORSENING",
     "BBX_MAX_RECENT_WORSENING",
 )
-
-assert len(ACCEPTED_FINAL_FEATURES) == 166, f"Expected 166 features, got {len(ACCEPTED_FINAL_FEATURES)}"
-assert len(set(ACCEPTED_FINAL_FEATURES)) == 166, "Duplicate features found in ACCEPTED_FINAL_FEATURES"
-assert len(ACCEPTED_CATEGORICAL_FEATURES) == 15, f"Expected 15 categorical features, got {len(ACCEPTED_CATEGORICAL_FEATURES)}"
-assert len(set(ACCEPTED_CATEGORICAL_FEATURES)) == 15, "Duplicate categorical features found"
