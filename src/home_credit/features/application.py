@@ -30,6 +30,75 @@ HOUSING_COLUMN_TOKENS: tuple[str, ...] = (
     "YEARS_BEGINEXPLUATATION",
 )
 
+APPLICATION_FEATURES: tuple[str, ...] = (
+    'NAME_CONTRACT_TYPE',
+    'CODE_GENDER',
+    'FLAG_OWN_CAR',
+    'CNT_CHILDREN',
+    'AMT_INCOME_TOTAL',
+    'AMT_CREDIT',
+    'AMT_ANNUITY',
+    'AMT_GOODS_PRICE',
+    'NAME_TYPE_SUITE',
+    'NAME_INCOME_TYPE',
+    'NAME_EDUCATION_TYPE',
+    'NAME_FAMILY_STATUS',
+    'NAME_HOUSING_TYPE',
+    'REGION_POPULATION_RELATIVE',
+    'DAYS_BIRTH',
+    'DAYS_EMPLOYED',
+    'DAYS_REGISTRATION',
+    'DAYS_ID_PUBLISH',
+    'OWN_CAR_AGE',
+    'FLAG_WORK_PHONE',
+    'FLAG_PHONE',
+    'OCCUPATION_TYPE',
+    'CNT_FAM_MEMBERS',
+    'REGION_RATING_CLIENT',
+    'REGION_RATING_CLIENT_W_CITY',
+    'WEEKDAY_APPR_PROCESS_START',
+    'HOUR_APPR_PROCESS_START',
+    'REG_CITY_NOT_LIVE_CITY',
+    'REG_CITY_NOT_WORK_CITY',
+    'LIVE_CITY_NOT_WORK_CITY',
+    'ORGANIZATION_TYPE',
+    'EXT_SOURCE_1',
+    'EXT_SOURCE_2',
+    'EXT_SOURCE_3',
+    'APARTMENTS_AVG',
+    'BASEMENTAREA_AVG',
+    'YEARS_BEGINEXPLUATATION_AVG',
+    'YEARS_BUILD_AVG',
+    'ELEVATORS_AVG',
+    'ENTRANCES_AVG',
+    'FLOORSMAX_AVG',
+    'LANDAREA_AVG',
+    'LIVINGAPARTMENTS_AVG',
+    'LIVINGAREA_AVG',
+    'NONLIVINGAPARTMENTS_AVG',
+    'NONLIVINGAREA_AVG',
+    'FONDKAPREMONT_MODE',
+    'HOUSETYPE_MODE',
+    'TOTALAREA_MODE',
+    'WALLSMATERIAL_MODE',
+    'EMERGENCYSTATE_MODE',
+    'OBS_30_CNT_SOCIAL_CIRCLE',
+    'DEF_30_CNT_SOCIAL_CIRCLE',
+    'OBS_60_CNT_SOCIAL_CIRCLE',
+    'DEF_60_CNT_SOCIAL_CIRCLE',
+    'DAYS_LAST_PHONE_CHANGE',
+    'FLAG_DOCUMENT_3',
+    'FLAG_DOCUMENT_6',
+    'FLAG_DOCUMENT_18',
+    'AMT_REQ_CREDIT_BUREAU_QRT',
+    'AMT_REQ_CREDIT_BUREAU_YEAR',
+    'AGE_YEARS',
+    'EMPLOYED_YEARS',
+    'HOUSING_INFO_MISSING_PCT',
+    'CREDIT_INCOME_RATIO',
+    'ANNUITY_INCOME_RATIO',
+    'ANNUITY_CREDIT_RATIO',
+)
 
 def build_application_features(
     applications: pd.DataFrame,
@@ -58,23 +127,30 @@ def build_application_features(
     df = applications.copy()
 
     # Anomaly handling: 365243 in DAYS_EMPLOYED indicates missing/unemployed
-    if "DAYS_EMPLOYED" in df.columns:
-        df["DAYS_EMPLOYED_ANOMALY"] = (df["DAYS_EMPLOYED"] == 365243).astype("int8")
-        df["DAYS_EMPLOYED"] = df["DAYS_EMPLOYED"].replace(365243, np.nan)
+
+    df["DAYS_EMPLOYED_ANOMALY"] = (df["DAYS_EMPLOYED"] == 365243).astype("int8")
+    df["DAYS_EMPLOYED"] = df["DAYS_EMPLOYED"].replace(365243, np.nan)
 
     # Demographic and employment duration
-    if "DAYS_BIRTH" in df.columns:
-        df["AGE_YEARS"] = -df["DAYS_BIRTH"] / 365.25
-    if "DAYS_EMPLOYED" in df.columns:
-        df["EMPLOYED_YEARS"] = -df["DAYS_EMPLOYED"] / 365.25
+    df["AGE_YEARS"] = -df["DAYS_BIRTH"] / 365.25
+
+    df["EMPLOYED_YEARS"] = -df["DAYS_EMPLOYED"] / 365.25
 
     # Core financial ratios
-    if "AMT_CREDIT" in df.columns and "AMT_INCOME_TOTAL" in df.columns:
-        df["CREDIT_INCOME_RATIO"] = df["AMT_CREDIT"] / df["AMT_INCOME_TOTAL"]
-    if "AMT_ANNUITY" in df.columns and "AMT_INCOME_TOTAL" in df.columns:
-        df["ANNUITY_INCOME_RATIO"] = df["AMT_ANNUITY"] / df["AMT_INCOME_TOTAL"]
-    if "AMT_ANNUITY" in df.columns and "AMT_CREDIT" in df.columns:
-        df["ANNUITY_CREDIT_RATIO"] = df["AMT_ANNUITY"] / df["AMT_CREDIT"]
+    df["CREDIT_INCOME_RATIO"] = (
+        df["AMT_CREDIT"]
+        / df["AMT_INCOME_TOTAL"].replace(0, np.nan)
+    )
+
+    df["ANNUITY_INCOME_RATIO"] = (
+        df["AMT_ANNUITY"]
+        / df["AMT_INCOME_TOTAL"].replace(0, np.nan)
+    )
+
+    df["ANNUITY_CREDIT_RATIO"] = (
+        df["AMT_ANNUITY"]
+        / df["AMT_CREDIT"].replace(0, np.nan)
+    )
 
     # Housing missingness share
     housing_cols = [
@@ -87,7 +163,13 @@ def build_application_features(
 
     # Categorical missingness representation
     for cat_col in ACCEPTED_CATEGORICAL_FEATURES:
-        if cat_col in df.columns:
+        if isinstance(df[cat_col].dtype, pd.CategoricalDtype):
+            if "__MISSING__" not in df[cat_col].cat.categories:
+                df[cat_col] = df[cat_col].cat.add_categories(["__MISSING__"])
+
+            df[cat_col] = df[cat_col].fillna("__MISSING__")
+
+        else:
             df[cat_col] = df[cat_col].fillna("__MISSING__").astype("category")
 
     return df

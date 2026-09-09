@@ -1,7 +1,15 @@
 """Production model schema for Home Credit Default Risk.
 
 This module is the single source of truth for the production model feature schema,
-frozen from the final research representation (RFE2 148 + POSX 9 + BBX 9 = 166 features).
+frozen from the final research representation (
+67 application
++ 16 bureau
++ 34 previous
++ 12 credit card
++ 19 installments
++ 9 POS
++ 9 bureau balance
+= 166).
 F8 / IPX and all other rejected candidate features are strictly excluded.
 """
 
