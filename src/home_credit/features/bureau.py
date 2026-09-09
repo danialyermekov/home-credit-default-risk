@@ -10,7 +10,7 @@ from __future__ import annotations
 import pandas as pd
 
 # The 16 accepted bureau features present in ACCEPTED_FINAL_FEATURES
-BUREAU_ACCEPTED_FEATURES: list[str] = [
+BUREAU_ACCEPTED_FEATURES: tuple[str, ...] = (
     "MAX_CREDIT_OVERDUE_AMT",
     "BUREAU_CREDIT_COUNT",
     "BUREAU_ACTIVE_COUNT",
@@ -27,14 +27,14 @@ BUREAU_ACCEPTED_FEATURES: list[str] = [
     "BUREAU_TOTAL_CREDIT_LIMIT",
     "BUREAU_MEAN_CREDIT_SUM",
     "BUREAU_TOTAL_CREDIT_DEBT",
-]
+)
 
-BUREAU_COUNT_FEATURES: list[str] = [
+BUREAU_COUNT_FEATURES: tuple[str, ...] = (
     "BUREAU_CREDIT_COUNT",
     "BUREAU_ACTIVE_COUNT",
     "BUREAU_CLOSED_COUNT",
     "BUREAU_SOLD_COUNT",
-]
+)
 
 
 def build_bureau_features(
@@ -94,5 +94,5 @@ def build_bureau_features(
         features["BUREAU_ACTIVE_COUNT"] / features["BUREAU_CREDIT_COUNT"]
     )
 
-    output_cols = ["SK_ID_CURR"] + BUREAU_ACCEPTED_FEATURES
+    output_cols = ["SK_ID_CURR"] + list(BUREAU_ACCEPTED_FEATURES)
     return features[output_cols]
