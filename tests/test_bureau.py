@@ -3,7 +3,7 @@ import pandas as pd
 from home_credit.features.bureau import build_bureau_features, BUREAU_ACCEPTED_FEATURES
 
 @pytest.fixture
-def bureau_df():
+def bureau_df() -> pd.DataFrame:
     test_bureau = pd.DataFrame(
     [
         {
@@ -66,26 +66,27 @@ def bureau_df():
     return test_bureau
 
 
-def test_input_dataframe_is_not_mutated(bureau_df):
+
+def test_input_dataframe_is_not_mutated(bureau_df: pd.DataFrame) -> None:
     original_df = bureau_df.copy(deep=True)
 
     build_bureau_features(original_df)
 
     pd.testing.assert_frame_equal(original_df, bureau_df)
 
-def test_unique_applicant_id(bureau_df):
+def test_unique_applicant_id(bureau_df: pd.DataFrame) -> None:
     df = build_bureau_features(bureau_df)
 
     assert df["SK_ID_CURR"].duplicated().sum() == 0
 
-def test_temporal_cutoff(bureau_df):
+def test_temporal_cutoff(bureau_df: pd.DataFrame) -> None:
     df = build_bureau_features(bureau_df)
 
     assert 1 in df["SK_ID_CURR"].values
 
     assert 2 not in df["SK_ID_CURR"].values
 
-def test_credit_status_aggregation(bureau_df):
+def test_credit_status_aggregation(bureau_df: pd.DataFrame) -> None:
     df = build_bureau_features(bureau_df)
     row = df.loc[df["SK_ID_CURR"] == 1].iloc[0]
 
@@ -95,7 +96,7 @@ def test_credit_status_aggregation(bureau_df):
     assert row["BUREAU_SOLD_COUNT"] == 1
     assert row["BUREAU_ACTIVE_SHARE"] == pytest.approx(1/3)
 
-def test_recency_aggregation(bureau_df):
+def test_recency_aggregation(bureau_df: pd.DataFrame) -> None:
     df = build_bureau_features(bureau_df)
     row = df.loc[df["SK_ID_CURR"] == 1].iloc[0]
 
@@ -105,7 +106,7 @@ def test_recency_aggregation(bureau_df):
     assert row["BUREAU_CREDITS_LAST_365D"] == 1
     assert row["BUREAU_CREDITS_LAST_730D"] == 2
 
-def test_monetary_aggregation(bureau_df):
+def test_monetary_aggregation(bureau_df: pd.DataFrame) -> None:
     df = build_bureau_features(bureau_df)
     row = df.loc[df["SK_ID_CURR"] == 1].iloc[0]
 
@@ -116,7 +117,7 @@ def test_monetary_aggregation(bureau_df):
     assert row["BUREAU_TOTAL_CREDIT_DEBT"] == pytest.approx(300.0)
     assert row["MAX_CREDIT_OVERDUE_AMT"] == pytest.approx(500.0)
 
-def test_bureau_schema(bureau_df):
+def test_bureau_schema(bureau_df: pd.DataFrame) -> None:
     df = build_bureau_features(bureau_df)
 
     assert list(df.columns) == ["SK_ID_CURR", *BUREAU_ACCEPTED_FEATURES]
