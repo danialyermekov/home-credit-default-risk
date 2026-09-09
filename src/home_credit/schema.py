@@ -7,7 +7,9 @@ F8 / IPX and all other rejected candidate features are strictly excluded.
 
 from __future__ import annotations
 
-ACCEPTED_CATEGORICAL_FEATURES: tuple[str, ...] = (
+from typing import Final
+
+ACCEPTED_CATEGORICAL_FEATURES: Final[tuple[str, ...]] = (
     "NAME_CONTRACT_TYPE",
     "CODE_GENDER",
     "FLAG_OWN_CAR",
@@ -25,7 +27,7 @@ ACCEPTED_CATEGORICAL_FEATURES: tuple[str, ...] = (
     "EMERGENCYSTATE_MODE",
 )
 
-ACCEPTED_FINAL_FEATURES: tuple[str, ...] = (
+ACCEPTED_FINAL_FEATURES: Final[tuple[str, ...]] = (
     "MAX_CREDIT_OVERDUE_AMT",
     "NAME_CONTRACT_TYPE",
     "CODE_GENDER",
