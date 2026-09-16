@@ -55,10 +55,9 @@ def build_pos_cash_features(
     if not (x["MONTHS_BALANCE"] <= 0).all():
         x = x.loc[x["MONTHS_BALANCE"] <= 0].copy()
 
-    x["POSX_REMAINING_RATIO"] = (
-        x["CNT_INSTALMENT_FUTURE"]
-        / x["CNT_INSTALMENT"].replace(0, np.nan)
-    )
+    x["POSX_REMAINING_RATIO"] = x["CNT_INSTALMENT_FUTURE"] / x[
+        "CNT_INSTALMENT"
+    ].replace(0, np.nan)
 
     x["POSX_DPD_FLAG"] = (x["SK_DPD"] > 0).astype(float)
     x["POSX_DPD30_FLAG"] = (x["SK_DPD"] > 30).astype(float)
@@ -91,32 +90,24 @@ def build_pos_cash_features(
 
     ordered = x.sort_values(["SK_ID_CURR", "SK_ID_PREV", "MONTHS_BALANCE"])
 
-    oldest = (
-        ordered
-        .drop_duplicates(["SK_ID_CURR", "SK_ID_PREV"], keep="first")
-        [["SK_ID_CURR", "SK_ID_PREV", "POSX_REMAINING_RATIO"]]
-        .rename(columns={"POSX_REMAINING_RATIO": "POSX_OLDEST_REMAINING_RATIO"})
-    )
+    oldest = ordered.drop_duplicates(["SK_ID_CURR", "SK_ID_PREV"], keep="first")[
+        ["SK_ID_CURR", "SK_ID_PREV", "POSX_REMAINING_RATIO"]
+    ].rename(columns={"POSX_REMAINING_RATIO": "POSX_OLDEST_REMAINING_RATIO"})
 
-    latest = (
-        ordered
-        .drop_duplicates(["SK_ID_CURR", "SK_ID_PREV"], keep="last")
+    latest = ordered.drop_duplicates(["SK_ID_CURR", "SK_ID_PREV"], keep="last")[
         [
-            [
-                "SK_ID_CURR",
-                "SK_ID_PREV",
-                "SK_DPD",
-                "SK_DPD_DEF",
-                "POSX_REMAINING_RATIO",
-            ]
+            "SK_ID_CURR",
+            "SK_ID_PREV",
+            "SK_DPD",
+            "SK_DPD_DEF",
+            "POSX_REMAINING_RATIO",
         ]
-        .rename(
-            columns={
-                "SK_DPD": "POSX_LATEST_DPD",
-                "SK_DPD_DEF": "POSX_LATEST_DPD_DEF",
-                "POSX_REMAINING_RATIO": "POSX_LATEST_REMAINING_RATIO",
-            }
-        )
+    ].rename(
+        columns={
+            "SK_DPD": "POSX_LATEST_DPD",
+            "SK_DPD_DEF": "POSX_LATEST_DPD_DEF",
+            "POSX_REMAINING_RATIO": "POSX_LATEST_REMAINING_RATIO",
+        }
     )
 
     contract = contract.merge(oldest).merge(latest)
@@ -127,8 +118,7 @@ def build_pos_cash_features(
     )
 
     contract["POSX_RECENT_WORSENING"] = (
-        contract["POSX_RECENT6_DPD_SHARE"]
-        - contract["POSX_DPD_SHARE"]
+        contract["POSX_RECENT6_DPD_SHARE"] - contract["POSX_DPD_SHARE"]
     )
 
     contract["POSX_BAD_LATEST"] = (contract["POSX_LATEST_DPD"] > 0).astype(float)

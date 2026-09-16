@@ -76,37 +76,31 @@ def build_installments_features(
     ip1 = ip1.merge(unique_installments, on="SK_ID_CURR", how="left")
 
     # IP2: Aggregate multiple payment entries to single scheduled installment level
-    installment_level = (
-        ip
-        .groupby(
-            [
-                "SK_ID_CURR",
-                "SK_ID_PREV",
-                "NUM_INSTALMENT_VERSION",
-                "NUM_INSTALMENT_NUMBER",
-            ],
-            as_index=False,
-        )
-        .agg(
-            DAYS_INSTALMENT=("DAYS_INSTALMENT", "first"),
-            LAST_PAYMENT_DAY=("DAYS_ENTRY_PAYMENT", "max"),
-            AMT_INSTALMENT=("AMT_INSTALMENT", "first"),
-            TOTAL_PAYMENT=("AMT_PAYMENT", "sum"),
-        )
+    installment_level = ip.groupby(
+        [
+            "SK_ID_CURR",
+            "SK_ID_PREV",
+            "NUM_INSTALMENT_VERSION",
+            "NUM_INSTALMENT_NUMBER",
+        ],
+        as_index=False,
+    ).agg(
+        DAYS_INSTALMENT=("DAYS_INSTALMENT", "first"),
+        LAST_PAYMENT_DAY=("DAYS_ENTRY_PAYMENT", "max"),
+        AMT_INSTALMENT=("AMT_INSTALMENT", "first"),
+        TOTAL_PAYMENT=("AMT_PAYMENT", "sum"),
     )
 
     installment_level["IP_DELAY_DAYS"] = (
-        installment_level["LAST_PAYMENT_DAY"]
-        - installment_level["DAYS_INSTALMENT"]
+        installment_level["LAST_PAYMENT_DAY"] - installment_level["DAYS_INSTALMENT"]
     ).clip(lower=0)
 
-    installment_level["IP_IS_LATE"] = (
-        installment_level["IP_DELAY_DAYS"] > 0
-    ).astype("int8")
+    installment_level["IP_IS_LATE"] = (installment_level["IP_DELAY_DAYS"] > 0).astype(
+        "int8"
+    )
 
     installment_level["IP_PAYMENT_SHORTFALL"] = (
-        installment_level["AMT_INSTALMENT"]
-        - installment_level["TOTAL_PAYMENT"]
+        installment_level["AMT_INSTALMENT"] - installment_level["TOTAL_PAYMENT"]
     ).clip(lower=0)
 
     installment_level["IP_IS_UNDERPAID"] = (
@@ -159,10 +153,8 @@ def build_installments_features(
 
     ip3_history = ip_recent_6m.merge(ip_recent_12m, on="SK_ID_CURR", how="outer")
 
-    features = (
-        ip1
-        .merge(ip2, on="SK_ID_CURR", how="left")
-        .merge(ip3_history, on="SK_ID_CURR", how="left")
+    features = ip1.merge(ip2, on="SK_ID_CURR", how="left").merge(
+        ip3_history, on="SK_ID_CURR", how="left"
     )
 
     output_cols = ["SK_ID_CURR"] + INSTALLMENTS_ACCEPTED_FEATURES

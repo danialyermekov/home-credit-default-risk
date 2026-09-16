@@ -24,7 +24,6 @@ def _(mo):
     This notebook covers only `application_train.csv`.
     External Home Credit tables are intentionally excluded from this stage.
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -42,7 +41,6 @@ def _(mo):
     7. Final dataset preparation
     8. EDA summary
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -50,7 +48,6 @@ def _(mo):
     mo.md(r"""
     ## Environment and data preparation
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -58,33 +55,27 @@ def _(mo):
     mo.md(r"""
     ### Imports and settings
     """)
-    return
 
 
 @app.cell
 def _():
     from pathlib import Path
 
+    import matplotlib.pyplot as plt
     import numpy as np
     import pandas as pd
-
-    import matplotlib.pyplot as plt
-    import seaborn as sns
     import plotly.express as px
-
-    from scipy import stats
-
+    import seaborn as sns
+    from scipy.stats import chi2_contingency, mannwhitneyu
     from sklearn.metrics import (
         accuracy_score,
+        average_precision_score,
         balanced_accuracy_score,
+        f1_score,
         precision_score,
         recall_score,
-        f1_score,
         roc_auc_score,
-        average_precision_score,
     )
-
-    from scipy.stats import mannwhitneyu, chi2_contingency
 
     return (
         Path,
@@ -130,7 +121,6 @@ def _(mo):
     mo.md(r"""
     ### Primary look at data
     """)
-    return
 
 
 @app.cell
@@ -143,25 +133,21 @@ def _(TRAIN_PATH, pd):
 def _(df):
     print(f"Number of rows: {df.shape[0]}")
     print(f"Number of columns: {df.shape[1]}")
-    return
 
 
 @app.cell
 def _(df):
     df.head(5)
-    return
 
 
 @app.cell
 def _(df):
     df.dtypes.value_counts()
-    return
 
 
 @app.cell
 def _(df):
     df.info(memory_usage="deep")
-    return
 
 
 @app.cell
@@ -174,11 +160,10 @@ def _(df, pd):
             "Percentage of missing values": f"{df.isnull().mean().mean() * 100:.2f}%",
             "Number of duplicate rows": f"{df.duplicated().sum()}",
             "Percentage of duplicate rows": f"{df.duplicated().mean() * 100:.2f}%",
-            "Memory usage (MB)": f"{df.memory_usage(deep=True).sum() / 1024 ** 2:.2f}"
+            "Memory usage (MB)": f"{df.memory_usage(deep=True).sum() / 1024**2:.2f}",
         }
     )
     overview
-    return
 
 
 @app.cell(hide_code=True)
@@ -190,7 +175,6 @@ def _(mo):
     - **Evidence:** 65 float, 41 integer, and 16 string columns were detected in the original CSV.
     - **Implication:** Different feature groups will require different EDA and preprocessing strategies.
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -198,7 +182,6 @@ def _(mo):
     mo.md(r"""
     ### Data types optimization
     """)
-    return
 
 
 @app.cell
@@ -218,7 +201,6 @@ def _(df):
 @app.cell
 def _(df, object_columns):
     df[object_columns].nunique().sort_values(ascending=False)
-    return
 
 
 @app.cell
@@ -236,7 +218,6 @@ def _(df_opt, float_columns, integer_columns, object_columns, pd):
     # Downcast float columns
     for float_col in float_columns:
         df_opt[float_col] = pd.to_numeric(df_opt[float_col], downcast="float")
-    return
 
 
 @app.cell
@@ -263,7 +244,13 @@ def _(
     pd,
 ):
     optimization_summary = pd.DataFrame(
-        index=["memory_mb", "int64_count", "float64_count", "object_count", "category_count"],
+        index=[
+            "memory_mb",
+            "int64_count",
+            "float64_count",
+            "object_count",
+            "category_count",
+        ],
         data={
             "before": [
                 memory_before,
@@ -279,18 +266,22 @@ def _(
                 0,
                 len(df_opt.select_dtypes(include=["category"]).columns),
             ],
-        }
+        },
     )
     optimization_summary
-    return
 
 
 @app.cell
 def _(df_opt):
-    print(f"Float64 columns: {df_opt.select_dtypes(include=['float64']).columns.tolist()}")
-    print(f"Maximum value of float64 columns: {df_opt.select_dtypes(include=['float64']).max().max()}")
-    print(f"Minimum value of float64 columns: {df_opt.select_dtypes(include=['float64']).min().min()}")
-    return
+    print(
+        f"Float64 columns: {df_opt.select_dtypes(include=['float64']).columns.tolist()}"
+    )
+    print(
+        f"Maximum value of float64 columns: {df_opt.select_dtypes(include=['float64']).max().max()}"
+    )
+    print(
+        f"Minimum value of float64 columns: {df_opt.select_dtypes(include=['float64']).min().min()}"
+    )
 
 
 @app.cell
@@ -301,20 +292,23 @@ def _(df, df_opt, float_columns, integer_columns, np):
     float_cols_corupted = []
 
     for integer_col in integer_columns:
-        if not np.array_equal(df[integer_col].to_numpy(), df_opt[integer_col].to_numpy(), equal_nan=True):
+        if not np.array_equal(
+            df[integer_col].to_numpy(), df_opt[integer_col].to_numpy(), equal_nan=True
+        ):
             int_cols_corupted.append(integer_col)
-            print(f"Integer column {integer_col} has been corrupted during optimization.")
-
+            print(
+                f"Integer column {integer_col} has been corrupted during optimization."
+            )
 
     for f_col in float_columns:
-        if not np.allclose(df[f_col], df_opt[f_col], rtol=1e-04, atol=1e-04, equal_nan=True):
+        if not np.allclose(
+            df[f_col], df_opt[f_col], rtol=1e-04, atol=1e-04, equal_nan=True
+        ):
             float_cols_corupted.append(f_col)
             print(f"Float column {f_col} has been corrupted during optimization.")
 
-
     print(f"Number of corrupted integer columns: {len(int_cols_corupted)}")
     print(f"Number of corrupted float columns: {len(float_cols_corupted)}")
-    return
 
 
 @app.cell(hide_code=True)
@@ -326,7 +320,6 @@ def _(mo):
     - **Evidence:** Memory usage decreased from about 505 MB to 96.5 MB, a reduction of roughly 81%, while validation checks found no corrupted numeric columns.
     - **Implication:** The optimized dataset can be used safely for subsequent EDA with much lower memory overhead.
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -334,18 +327,11 @@ def _(mo):
     mo.md(r"""
     ### Save and load in parquet
     """)
-    return
 
 
 @app.cell
 def _(PARQUET_PATH, df_opt):
-    df_opt.to_parquet(
-        PARQUET_PATH,
-        engine="pyarrow",
-        index=False,
-        compression="snappy"
-    )
-    return
+    df_opt.to_parquet(PARQUET_PATH, engine="pyarrow", index=False, compression="snappy")
 
 
 @app.cell
@@ -358,7 +344,6 @@ def _(PARQUET_PATH, pd):
 def _(df, df_opt):
     del df
     del df_opt
-    return
 
 
 @app.cell(hide_code=True)
@@ -370,7 +355,6 @@ def _(mo):
     - **Evidence:** Parquet loaded in roughly 0.5 seconds versus about 5 seconds for CSV.
     - **Implication:** Parquet will be used as the working format for the remaining EDA.
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -378,29 +362,28 @@ def _(mo):
     mo.md(r"""
     ## Dataset structure
     """)
-    return
 
 
 @app.cell
 def _(df_parquet, pd):
-    feature_summary = pd.DataFrame({
-        "dtype": df_parquet.dtypes.astype(str),
-        "nunique": df_parquet.nunique(dropna=False),
-        "missing_pct": df_parquet.isnull().mean() * 100
-    }).sort_values(by="nunique", ascending=False)
+    feature_summary = pd.DataFrame(
+        {
+            "dtype": df_parquet.dtypes.astype(str),
+            "nunique": df_parquet.nunique(dropna=False),
+            "missing_pct": df_parquet.isnull().mean() * 100,
+        }
+    ).sort_values(by="nunique", ascending=False)
 
     feature_summary.head(50)
-    return
 
 
 @app.cell
 def _(df_parquet):
     numeric_cardinality = (
-        df_parquet.select_dtypes(include='number')
-        .nunique().sort_values())
+        df_parquet.select_dtypes(include="number").nunique().sort_values()
+    )
 
     numeric_cardinality.head(30)
-    return
 
 
 @app.cell(hide_code=True)
@@ -408,46 +391,47 @@ def _(mo):
     mo.md(r"""
     ### Features classification
     """)
-    return
 
 
 @app.cell
 def _(pd):
     def get_semantic_type(col_name: str, series: pd.Series) -> str | None:
-        if col_name == 'TARGET':
-            return 'target'
-        elif col_name.endswith('_ID') or col_name.startswith("SK_ID"):
-            return 'identifier'
-        elif col_name.startswith('DAYS_'):
-            return 'duration/date-like'
+        if col_name == "TARGET":
+            return "target"
+        elif col_name.endswith("_ID") or col_name.startswith("SK_ID"):
+            return "identifier"
+        elif col_name.startswith("DAYS_"):
+            return "duration/date-like"
         elif series.nunique() == 2:
-            return 'binary'
+            return "binary"
         elif series.nunique() <= 200:
-            return 'discrete'
+            return "discrete"
         elif series.nunique() > 200:
-            return 'continuous'
+            return "continuous"
 
     return (get_semantic_type,)
 
 
 @app.cell
 def _(df_parquet, get_semantic_type, pd):
-    numeric_columns = df_parquet.select_dtypes(include='number').columns
+    numeric_columns = df_parquet.select_dtypes(include="number").columns
     feature_types = []
     for num_col in numeric_columns:
         semantic_type = get_semantic_type(num_col, df_parquet[num_col])
-        feature_types.append({'feature': num_col, 'semantic_type': semantic_type})
+        feature_types.append({"feature": num_col, "semantic_type": semantic_type})
 
-    num_schema = pd.DataFrame(feature_types).sort_values(by='semantic_type', ascending=False).reset_index()
+    num_schema = (
+        pd.DataFrame(feature_types)
+        .sort_values(by="semantic_type", ascending=False)
+        .reset_index()
+    )
     num_schema
-    return
 
 
 @app.cell
 def _(df_parquet):
-    cat_columns = df_parquet.select_dtypes(include='category').columns
+    cat_columns = df_parquet.select_dtypes(include="category").columns
     df_parquet[cat_columns]
-    return
 
 
 @app.cell
@@ -468,13 +452,13 @@ def _(pd):
         "FONDKAPREMONT_MODE": "nominal",
         "HOUSETYPE_MODE": "nominal",
         "WALLSMATERIAL_MODE": "nominal",
-        "EMERGENCYSTATE_MODE": "nominal"
+        "EMERGENCYSTATE_MODE": "nominal",
     }
 
     cat_schema = (
         pd.Series(cat_dict, name="categorical_type")
-          .rename_axis("feature")
-          .reset_index()
+        .rename_axis("feature")
+        .reset_index()
     )
     cat_schema
     return (cat_schema,)
@@ -489,7 +473,6 @@ def _(mo):
     - **Evidence:** The dataset contains identifiers, binary flags, categorical variables, count variables, continuous numeric features, and date-like duration features.
     - **Implication:** Subsequent EDA should select visualizations and statistical tests based on semantic feature type rather than dtype alone.
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -497,15 +480,16 @@ def _(mo):
     mo.md(r"""
     ### Analysis of null values
     """)
-    return
 
 
 @app.cell
 def _(df_parquet, pd):
-    missing_summary = pd.DataFrame({
-        "missing_count": df_parquet.isnull().sum(),
-        "missing_pct": df_parquet.isnull().mean() * 100
-    })
+    missing_summary = pd.DataFrame(
+        {
+            "missing_count": df_parquet.isnull().sum(),
+            "missing_pct": df_parquet.isnull().mean() * 100,
+        }
+    )
 
     missing_summary.sort_values(by="missing_pct", ascending=False).head(50)
     return (missing_summary,)
@@ -513,50 +497,50 @@ def _(df_parquet, pd):
 
 @app.cell
 def _(missing_summary, pd):
-    missing_summary['missing_group'] = pd.cut(
-        missing_summary['missing_pct'],
+    missing_summary["missing_group"] = pd.cut(
+        missing_summary["missing_pct"],
         bins=[0, 5, 20, 40, 60, 80, 100],
         labels=["0-5%", "5-20%", "20-40%", "40-60%", "60-80%", "80-100%"],
-        include_lowest=True
+        include_lowest=True,
     )
 
-    missing_summary['missing_group'].value_counts().sort_index()
-    return
+    missing_summary["missing_group"].value_counts().sort_index()
 
 
 @app.cell
 def _(missing_summary, px):
     top_missing = (
-        missing_summary.sort_values('missing_pct', ascending=False)
-        .head(30).reset_index(names='feature')
+        missing_summary.sort_values("missing_pct", ascending=False)
+        .head(30)
+        .reset_index(names="feature")
     )
 
     fig = px.bar(
         top_missing,
-        x='missing_pct',
-        y='feature',
-        orientation='h',
-        title='Top 20 Features with Highest Missing Value Percentage',
-        labels={'missing_pct': 'Missing Value Percentage', 'feature': 'Feature'}
+        x="missing_pct",
+        y="feature",
+        orientation="h",
+        title="Top 20 Features with Highest Missing Value Percentage",
+        labels={"missing_pct": "Missing Value Percentage", "feature": "Feature"},
     )
 
-    fig.update_layout(yaxis={'categoryorder':'total ascending'})
+    fig.update_layout(yaxis={"categoryorder": "total ascending"})
 
     fig.show()
-    return
 
 
 @app.cell
 def _(df_parquet, pd):
-    def missing_analysis(missing_feature: str, groupby_feature: str ='FLAG_OWN_REALTY') -> pd.DataFrame:
+    def missing_analysis(
+        missing_feature: str, groupby_feature: str = "FLAG_OWN_REALTY"
+    ) -> pd.DataFrame:
         missing_by_group = (
-        df_parquet
-        .assign(is_missing=df_parquet[missing_feature].isna())
-        .groupby(groupby_feature, observed=True)["is_missing"]
-        .mean()
-        .mul(100)
-    )
-        return missing_by_group 
+            df_parquet.assign(is_missing=df_parquet[missing_feature].isna())
+            .groupby(groupby_feature, observed=True)["is_missing"]
+            .mean()
+            .mul(100)
+        )
+        return missing_by_group
 
     return (missing_analysis,)
 
@@ -566,43 +550,36 @@ def _(mo):
     mo.md(r"""
     #### Features associated with houses/appartments
     """)
-    return
 
 
 @app.cell
 def _(missing_analysis):
-    missing_analysis('COMMONAREA_MODE')
-    return
+    missing_analysis("COMMONAREA_MODE")
 
 
 @app.cell
 def _(missing_analysis):
-    missing_analysis('COMMONAREA_MODE', 'NAME_HOUSING_TYPE')
-    return
+    missing_analysis("COMMONAREA_MODE", "NAME_HOUSING_TYPE")
 
 
 @app.cell
 def _(missing_analysis):
-    missing_analysis('LIVINGAPARTMENTS_AVG')
-    return
+    missing_analysis("LIVINGAPARTMENTS_AVG")
 
 
 @app.cell
 def _(missing_analysis):
-    missing_analysis('LIVINGAPARTMENTS_AVG', 'NAME_HOUSING_TYPE')
-    return
+    missing_analysis("LIVINGAPARTMENTS_AVG", "NAME_HOUSING_TYPE")
 
 
 @app.cell
 def _(missing_analysis):
-    missing_analysis('ELEVATORS_AVG')
-    return
+    missing_analysis("ELEVATORS_AVG")
 
 
 @app.cell
 def _(missing_analysis):
-    missing_analysis('ELEVATORS_AVG', 'NAME_HOUSING_TYPE')
-    return
+    missing_analysis("ELEVATORS_AVG", "NAME_HOUSING_TYPE")
 
 
 @app.cell(hide_code=True)
@@ -610,26 +587,21 @@ def _(mo):
     mo.md(r"""
     #### Other features
     """)
-    return
 
 
 @app.cell
 def _(missing_analysis):
-    missing_analysis('OWN_CAR_AGE', 'FLAG_OWN_CAR')
-    return
+    missing_analysis("OWN_CAR_AGE", "FLAG_OWN_CAR")
 
 
 @app.cell
 def _(missing_analysis):
-    missing_analysis('OCCUPATION_TYPE', 'NAME_INCOME_TYPE')
-    return
+    missing_analysis("OCCUPATION_TYPE", "NAME_INCOME_TYPE")
 
 
 @app.cell
 def _(missing_analysis):
-    missing_analysis(
-        'EXT_SOURCE_1', 'NAME_EDUCATION_TYPE')
-    return
+    missing_analysis("EXT_SOURCE_1", "NAME_EDUCATION_TYPE")
 
 
 @app.cell(hide_code=True)
@@ -641,7 +613,6 @@ def _(mo):
     - **Evidence:** House related features for Rented apartment have 10-20% more missing values comparing to other `NAME_HOUSING_TYPE`. `OWN_CAR_AGE` has 100% missing rate for clients without a car. `OCCUPATION_TYPE` is nearly always missing for unemployed and pensionners. Missing values of `EXT_SOURCE_1` also varies across education types with spikes for Lower secondary and Secondary/secondary special.
     -  **Implication:** Missingness is unlike to be completely random. Missing values should not be removed blindly and can be useful for modeling.
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -649,31 +620,28 @@ def _(mo):
     mo.md(r"""
     ### Integrity check
     """)
-    return
 
 
 @app.cell
 def _(df_parquet):
-    nunique_ids = df_parquet['SK_ID_CURR'].nunique()
+    nunique_ids = df_parquet["SK_ID_CURR"].nunique()
     n_rows = df_parquet.shape[0]
 
-    print(f'Number of rows: {n_rows}')
-    print(f'Number of unique IDs: {nunique_ids}')
-    print(f'Number of duplicate ids: {n_rows - nunique_ids}')
-    return
+    print(f"Number of rows: {n_rows}")
+    print(f"Number of unique IDs: {nunique_ids}")
+    print(f"Number of duplicate ids: {n_rows - nunique_ids}")
 
 
 @app.cell
 def _(df_parquet):
     duplicated_rows = df_parquet.duplicated().sum()
-    print(f'Number of duplicated rows: {duplicated_rows}')
-    return
+    print(f"Number of duplicated rows: {duplicated_rows}")
 
 
 @app.cell
 def _(df_parquet):
     nunique_rows = df_parquet.nunique(dropna=False)
-    constant_columns = nunique_rows[nunique_rows==1].index.tolist()
+    constant_columns = nunique_rows[nunique_rows == 1].index.tolist()
     constant_columns
     return (nunique_rows,)
 
@@ -681,7 +649,6 @@ def _(df_parquet):
 @app.cell
 def _(nunique_rows):
     nunique_rows.sort_values(ascending=True).head(20)
-    return
 
 
 @app.cell(hide_code=True)
@@ -693,7 +660,6 @@ def _(mo):
     - **Evidence:** `Number of duplicated ids` = 0, `Number of duplicated rows` = 0, `constant_columns` = []
     - **Implication**: Each row represents a unique loan application identified by `SK_ID_CURR`
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -701,7 +667,6 @@ def _(mo):
     mo.md(r"""
     ## Target analysis
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -709,57 +674,53 @@ def _(mo):
     mo.md(r"""
     ### Target variable distribution
     """)
-    return
 
 
 @app.cell
 def _(df_parquet):
-    target_counts = df_parquet['TARGET'].value_counts().sort_index()
+    target_counts = df_parquet["TARGET"].value_counts().sort_index()
     print(target_counts)
     return (target_counts,)
 
 
 @app.cell
 def _(df_parquet):
-    target_percentages = df_parquet['TARGET'].value_counts(normalize=True).sort_index()
+    target_percentages = df_parquet["TARGET"].value_counts(normalize=True).sort_index()
     print(target_percentages)
     return (target_percentages,)
 
 
 @app.cell
 def _(pd, target_counts, target_percentages):
-    target_summary = pd.DataFrame({
-        "count": target_counts,
-        "percentage": target_percentages * 100
-    })
+    target_summary = pd.DataFrame(
+        {"count": target_counts, "percentage": target_percentages * 100}
+    )
     target_summary
     return (target_summary,)
 
 
 @app.cell
 def _(target_counts):
-    imbalance_ratio =target_counts[0] / target_counts[1]
+    imbalance_ratio = target_counts[0] / target_counts[1]
     print(imbalance_ratio)
-    return
 
 
 @app.cell
 def _(px, target_summary):
-    plot_df = (target_summary.reset_index(names='TARGET'))
+    plot_df = target_summary.reset_index(names="TARGET")
 
     target_bar_plot = px.bar(
         plot_df,
-        x='TARGET',
-        y='percentage',
-        text='percentage',
-        title='Distribution of TARGET variable',
-        labels={'TARGET': 'Target', 'percentage': 'Share (%)'}
+        x="TARGET",
+        y="percentage",
+        text="percentage",
+        title="Distribution of TARGET variable",
+        labels={"TARGET": "Target", "percentage": "Share (%)"},
     )
 
-    target_bar_plot.update_traces(texttemplate='%{text:.2f}%', textposition='outside')
+    target_bar_plot.update_traces(texttemplate="%{text:.2f}%", textposition="outside")
 
     target_bar_plot.show()
-    return
 
 
 @app.cell(hide_code=True)
@@ -771,7 +732,6 @@ def _(mo):
     - **Evidence:** `Number of positive class objects` = 24825, `number of negative class objects` = 282686. `Imbalance ratio` = 11.387.
     - **Implication:** Imbalance requires accurate choice of metric. Accuracy of dummy model that predicts negative class for all objects would be 92% for train set.
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -779,12 +739,11 @@ def _(mo):
     mo.md(r"""
     ### Baseline
     """)
-    return
 
 
 @app.cell
 def _(df_parquet, np):
-    y_true = df_parquet['TARGET']
+    y_true = df_parquet["TARGET"]
     y_pred_majority = np.zeros_like(y_true, dtype=int)
     y_score_majority = np.zeros_like(y_true)
     return y_pred_majority, y_score_majority, y_true
@@ -804,20 +763,29 @@ def _(
     y_score_majority,
     y_true,
 ):
-    dummy_metrics = pd.DataFrame({
-        "metric": ["accuracy", "balanced_accuracy", "recall", "precision", "f1", "roc_auc", "pr"],
-        "value": [
-            accuracy_score(y_true, y_pred_majority),
-            balanced_accuracy_score(y_true, y_pred_majority),
-            recall_score(y_true, y_pred_majority),
-            precision_score(y_true, y_pred_majority, zero_division=0),
-            f1_score(y_true, y_pred_majority),
-            roc_auc_score(y_true, y_score_majority),
-            average_precision_score(y_true, y_score_majority)
-        ]
-    })
-    dummy_metrics 
-    return
+    dummy_metrics = pd.DataFrame(
+        {
+            "metric": [
+                "accuracy",
+                "balanced_accuracy",
+                "recall",
+                "precision",
+                "f1",
+                "roc_auc",
+                "pr",
+            ],
+            "value": [
+                accuracy_score(y_true, y_pred_majority),
+                balanced_accuracy_score(y_true, y_pred_majority),
+                recall_score(y_true, y_pred_majority),
+                precision_score(y_true, y_pred_majority, zero_division=0),
+                f1_score(y_true, y_pred_majority),
+                roc_auc_score(y_true, y_score_majority),
+                average_precision_score(y_true, y_score_majority),
+            ],
+        }
+    )
+    dummy_metrics
 
 
 @app.cell(hide_code=True)
@@ -829,7 +797,6 @@ def _(mo):
     - **Evidence:** A classifier predicting only the negative class achieves ~91.9% accuracy, while positive-class recall and F1 are 0, balanced accuracy and ROC-AUC are 0.5, and Average Precision is approximately equal to the positive-class prevalence (~8.1%).
     - **Implication:** Model ranking should be evaluated using ROC-AUC and Average Precision, while precision, recall and F1 should be examined at an appropriately selected decision threshold.
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -837,7 +804,6 @@ def _(mo):
     mo.md(r"""
     ## Univariative analysis
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -845,30 +811,40 @@ def _(mo):
     mo.md(r"""
     ### Numerical features
     """)
-    return
 
 
 @app.cell
 def _(df_parquet, np, pd):
-    numeric_cols = [col for col in df_parquet.select_dtypes(include='number').columns.tolist() if col not in ['TARGET', "SK_ID_CURR"]]
+    numeric_cols = [
+        col
+        for col in df_parquet.select_dtypes(include="number").columns.tolist()
+        if col not in ["TARGET", "SK_ID_CURR"]
+    ]
 
-    numeric_profile = pd.DataFrame({
-        "feature": numeric_cols,
-        "dtype": df_parquet[numeric_cols].dtypes.astype(str),
-        "nunique": df_parquet[numeric_cols].nunique(dropna=False),
-        "missing_pct": df_parquet[numeric_cols].isnull().mean() * 100,
-        "mean": df_parquet[numeric_cols].mean(),
-        "std": df_parquet[numeric_cols].std(),
-        "min": df_parquet[numeric_cols].min(),
-        "25%": df_parquet[numeric_cols].quantile(0.25),
-        "median": df_parquet[numeric_cols].median(),
-        "75%": df_parquet[numeric_cols].quantile(0.75),
-        "max": df_parquet[numeric_cols].max(),
-        "skewness": df_parquet[numeric_cols].skew(),
-        "kurtosis": df_parquet[numeric_cols].kurtosis(),
-        "abs_skewness": df_parquet[numeric_cols].skew().abs(),
-        "max_to_median": df_parquet[numeric_cols].max() / df_parquet[numeric_cols].median().replace(0, np.nan),
-    }).sort_values(by="skewness").reset_index(drop=True)
+    numeric_profile = (
+        pd.DataFrame(
+            {
+                "feature": numeric_cols,
+                "dtype": df_parquet[numeric_cols].dtypes.astype(str),
+                "nunique": df_parquet[numeric_cols].nunique(dropna=False),
+                "missing_pct": df_parquet[numeric_cols].isnull().mean() * 100,
+                "mean": df_parquet[numeric_cols].mean(),
+                "std": df_parquet[numeric_cols].std(),
+                "min": df_parquet[numeric_cols].min(),
+                "25%": df_parquet[numeric_cols].quantile(0.25),
+                "median": df_parquet[numeric_cols].median(),
+                "75%": df_parquet[numeric_cols].quantile(0.75),
+                "max": df_parquet[numeric_cols].max(),
+                "skewness": df_parquet[numeric_cols].skew(),
+                "kurtosis": df_parquet[numeric_cols].kurtosis(),
+                "abs_skewness": df_parquet[numeric_cols].skew().abs(),
+                "max_to_median": df_parquet[numeric_cols].max()
+                / df_parquet[numeric_cols].median().replace(0, np.nan),
+            }
+        )
+        .sort_values(by="skewness")
+        .reset_index(drop=True)
+    )
 
     numeric_profile
     return numeric_cols, numeric_profile
@@ -876,26 +852,62 @@ def _(df_parquet, np, pd):
 
 @app.cell
 def _(numeric_profile):
-    top15_skewness = numeric_profile[[
-        'feature', 'missing_pct', 'nunique', 'median', 'mean', 'max', 'min', 'abs_skewness']]\
-        .sort_values(by='abs_skewness', ascending=False).head(15)
+    top15_skewness = (
+        numeric_profile[
+            [
+                "feature",
+                "missing_pct",
+                "nunique",
+                "median",
+                "mean",
+                "max",
+                "min",
+                "abs_skewness",
+            ]
+        ]
+        .sort_values(by="abs_skewness", ascending=False)
+        .head(15)
+    )
     top15_skewness
-    return
 
 
 @app.cell
 def _(numeric_profile):
-    top15_max_to_median = numeric_profile[[
-        'feature', 'missing_pct', 'nunique', 'median', 'mean', 'max', 'min', 'abs_skewness', 'max_to_median']]\
-        .sort_values(by='max_to_median', ascending=False).head(15)
+    top15_max_to_median = (
+        numeric_profile[
+            [
+                "feature",
+                "missing_pct",
+                "nunique",
+                "median",
+                "mean",
+                "max",
+                "min",
+                "abs_skewness",
+                "max_to_median",
+            ]
+        ]
+        .sort_values(by="max_to_median", ascending=False)
+        .head(15)
+    )
     top15_max_to_median
-    return
 
 
 @app.cell
 def _(numeric_profile):
-    numeric_profile[numeric_profile['feature'].isin(['EXT_SOURCE_1', 'EXT_SOURCE_2', 'EXT_SOURCE_3', 'DAYS_BIRTH', 'DAYS_EMPLOYED', 'AMT_INCOME_TOTAL', 'AMT_CREDIT'])]
-    return
+    numeric_profile[
+        numeric_profile["feature"].isin(
+            [
+                "EXT_SOURCE_1",
+                "EXT_SOURCE_2",
+                "EXT_SOURCE_3",
+                "DAYS_BIRTH",
+                "DAYS_EMPLOYED",
+                "AMT_INCOME_TOTAL",
+                "AMT_CREDIT",
+            ]
+        )
+    ]
 
 
 @app.cell(hide_code=True)
@@ -917,7 +929,6 @@ def _(mo):
     DAYS_BIRTH - negative min and max
     DAYS_EMPLOYED - negative min and imposible max
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -925,19 +936,16 @@ def _(mo):
     mo.md(r"""
     #### `FLAG_MOBIL` features
     """)
-    return
 
 
 @app.cell
 def _(df_parquet):
     df_parquet["FLAG_MOBIL"].value_counts(dropna=False)
-    return
 
 
 @app.cell
 def _(df_parquet):
     df_parquet["FLAG_CONT_MOBILE"].value_counts(dropna=False)
-    return
 
 
 @app.cell(hide_code=True)
@@ -945,7 +953,6 @@ def _(mo):
     mo.md(r"""
     These features are potentially useless for modeling.
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -953,13 +960,11 @@ def _(mo):
     mo.md(r"""
     #### `FLAG_DOCUMENT` features
     """)
-    return
 
 
 @app.cell
 def _(df_parquet):
     df_parquet["FLAG_DOCUMENT_12"].value_counts(dropna=False)
-    return
 
 
 @app.cell(hide_code=True)
@@ -967,7 +972,6 @@ def _(mo):
     mo.md(r"""
     Several document features are extremely sparse and may have limited predictive value.
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -975,13 +979,11 @@ def _(mo):
     mo.md(r"""
     #### `DAYS` features
     """)
-    return
 
 
 @app.cell
 def _(df_parquet):
-    df_parquet[[ 'DAYS_BIRTH', 'DAYS_EMPLOYED']].describe()
-    return
+    df_parquet[["DAYS_BIRTH", "DAYS_EMPLOYED"]].describe()
 
 
 @app.cell(hide_code=True)
@@ -989,7 +991,6 @@ def _(mo):
     mo.md(r"""
     This features represent number of days until loan application.
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -997,7 +998,6 @@ def _(mo):
     mo.md(r"""
     #### `AMT_INCOME_TOTAL` - highest skew among continuos features
     """)
-    return
 
 
 @app.cell
@@ -1007,9 +1007,9 @@ def _(px):
             df,
             x=feature,
             nbins=nbins,
-            title=f'Distribution of {feature}',
+            title=f"Distribution of {feature}",
             labels={feature: feature},
-            marginal="box"
+            marginal="box",
         )
         fig.show()
 
@@ -1019,8 +1019,7 @@ def _(px):
 @app.cell
 def _(df_parquet, plot_distribution):
     # Histogram for AMT_INCOME_TOTAL
-    plot_distribution(df_parquet, 'AMT_INCOME_TOTAL', nbins=60)
-    return
+    plot_distribution(df_parquet, "AMT_INCOME_TOTAL", nbins=60)
 
 
 @app.cell(hide_code=True)
@@ -1028,20 +1027,24 @@ def _(mo):
     mo.md(r"""
     Extreme skew, max of 117M for median of 147150
     """)
-    return
 
 
 @app.cell
 def _(df_parquet, plot_distribution):
-    upper_amt_income = df_parquet['AMT_INCOME_TOTAL'].quantile(0.99)
-    plot_distribution(df_parquet[df_parquet['AMT_INCOME_TOTAL'] <= upper_amt_income], 'AMT_INCOME_TOTAL', nbins=60)
+    upper_amt_income = df_parquet["AMT_INCOME_TOTAL"].quantile(0.99)
+    plot_distribution(
+        df_parquet[df_parquet["AMT_INCOME_TOTAL"] <= upper_amt_income],
+        "AMT_INCOME_TOTAL",
+        nbins=60,
+    )
     return (upper_amt_income,)
 
 
 @app.cell
 def _(df_parquet, upper_amt_income):
-    print(f"Number of rows with AMT_INCOME_TOTAL > {upper_amt_income}: {len(df_parquet[df_parquet['AMT_INCOME_TOTAL'] > upper_amt_income])}")
-    return
+    print(
+        f"Number of rows with AMT_INCOME_TOTAL > {upper_amt_income}: {len(df_parquet[df_parquet['AMT_INCOME_TOTAL'] > upper_amt_income])}"
+    )
 
 
 @app.cell(hide_code=True)
@@ -1049,7 +1052,6 @@ def _(mo):
     mo.md(r"""
     Cropped to 99th quantile `AMT_INCOME_TOTAL` is still moderately skewed
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -1057,13 +1059,13 @@ def _(mo):
     mo.md(r"""
     #### `AMT_REQ_CREDIT_BUREAU_QRT` with high missing percentage and extreme maximum value
     """)
-    return
 
 
 @app.cell
 def _(df_parquet):
-    df_parquet['AMT_REQ_CREDIT_BUREAU_QRT'].value_counts(dropna=False).sort_index(ascending=False).head(20)
-    return
+    df_parquet["AMT_REQ_CREDIT_BUREAU_QRT"].value_counts(dropna=False).sort_index(
+        ascending=False
+    ).head(20)
 
 
 @app.cell(hide_code=True)
@@ -1071,7 +1073,6 @@ def _(mo):
     mo.md(r"""
     Extreme value appears once, between it and regular ones lies no values
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -1079,13 +1080,13 @@ def _(mo):
     mo.md(r"""
     #### `DAYS_EMPLOYED` with impossible maximum value
     """)
-    return
 
 
 @app.cell
 def _(df_parquet):
-    df_parquet['DAYS_EMPLOYED'].value_counts(dropna=False).sort_index(ascending=False).head(20)
-    return
+    df_parquet["DAYS_EMPLOYED"].value_counts(dropna=False).sort_index(
+        ascending=False
+    ).head(20)
 
 
 @app.cell(hide_code=True)
@@ -1093,7 +1094,6 @@ def _(mo):
     mo.md(r"""
     Seems to be a flag for missing experience.
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -1101,13 +1101,11 @@ def _(mo):
     mo.md(r"""
     #### House-related features with high missing percentage and skewness
     """)
-    return
 
 
 @app.cell
 def _(df_parquet, plot_distribution):
-    plot_distribution(df_parquet, 'NONLIVINGAREA_AVG')
-    return
+    plot_distribution(df_parquet, "NONLIVINGAREA_AVG")
 
 
 @app.cell(hide_code=True)
@@ -1115,7 +1113,6 @@ def _(mo):
     mo.md(r"""
     Highly skewed distribution with median around 0 and large number of outliers
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -1127,7 +1124,6 @@ def _(mo):
     - **Evidence:** DAYS_EMPLOYED=365243 occurs in 55,374 rows and is physically impossible as employment duration; AMT_REQ_CREDIT_BUREAU_QRT=261 occurs once with no intermediate values; income and non-living-area features have strong right tails.
     - **Implication:** Extreme values require feature-specific treatment rather than automatic IQR-based removal. DAYS_EMPLOYED likely contains a sentinel value, while the isolated credit-bureau value requires separate handling.
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -1135,25 +1131,37 @@ def _(mo):
     mo.md(r"""
     ### Categorical features
     """)
-    return
 
 
 @app.cell
 def _(cat_schema, df_parquet, pd):
-    categorical_cols = cat_schema['feature'].tolist()
+    categorical_cols = cat_schema["feature"].tolist()
 
-    categorical_profile = pd.DataFrame({
-        "feature": categorical_cols,
-        "nunique": df_parquet[categorical_cols].nunique(dropna=False),
-        "missing_pct": df_parquet[categorical_cols].isnull().mean() * 100,
-        "top_category": df_parquet[categorical_cols].mode().iloc[0],
-        "top_category_pct": df_parquet[categorical_cols].apply(lambda x: x.value_counts(normalize=True, dropna=True).max() * 100),
-        "rare_category": df_parquet[categorical_cols].apply(lambda x: x.value_counts(normalize=True, dropna=False)).apply(lambda x: x[x < 0.01].index.tolist()),
-        "n_rara_categories": df_parquet[categorical_cols].apply(lambda x: (x.value_counts(normalize=True, dropna=False) < 0.01).sum())
-    }).sort_values(by="nunique", ascending=False).reset_index(drop=True)
+    categorical_profile = (
+        pd.DataFrame(
+            {
+                "feature": categorical_cols,
+                "nunique": df_parquet[categorical_cols].nunique(dropna=False),
+                "missing_pct": df_parquet[categorical_cols].isnull().mean() * 100,
+                "top_category": df_parquet[categorical_cols].mode().iloc[0],
+                "top_category_pct": df_parquet[categorical_cols].apply(
+                    lambda x: x.value_counts(normalize=True, dropna=True).max() * 100
+                ),
+                "rare_category": df_parquet[categorical_cols]
+                .apply(lambda x: x.value_counts(normalize=True, dropna=False))
+                .apply(lambda x: x[x < 0.01].index.tolist()),
+                "n_rara_categories": df_parquet[categorical_cols].apply(
+                    lambda x: (
+                        x.value_counts(normalize=True, dropna=False) < 0.01
+                    ).sum()
+                ),
+            }
+        )
+        .sort_values(by="nunique", ascending=False)
+        .reset_index(drop=True)
+    )
 
     categorical_profile
-    return
 
 
 @app.cell(hide_code=True)
@@ -1164,14 +1172,13 @@ def _(mo):
     NAME_TYPE_SUITE - top category of 80 percent, unrepresentative rare categories: ["Group of people","Other_A","Other_B",null]
     NAME_INCOME_TYPE - 4 rare categories
     """)
-    return
 
 
 @app.function
 def category_freq_table(df, feature, top_n=10):
     freq_table = df[feature].value_counts(dropna=False).head(top_n).reset_index()
-    freq_table.columns = [feature, 'count']
-    freq_table['percentage'] = (freq_table['count'] / len(df)) * 100
+    freq_table.columns = [feature, "count"]
+    freq_table["percentage"] = (freq_table["count"] / len(df)) * 100
     return freq_table
 
 
@@ -1180,32 +1187,35 @@ def _(mo):
     mo.md(r"""
     #### `ORGANIZATION_TYPE`
     """)
-    return
 
 
 @app.cell
 def _(df_parquet):
-    category_freq_table(df_parquet, 'ORGANIZATION_TYPE', top_n=15)
-    return
+    category_freq_table(df_parquet, "ORGANIZATION_TYPE", top_n=15)
 
 
 @app.cell
 def _(df_parquet, px):
-    organization_plot_df = category_freq_table(df_parquet, 'ORGANIZATION_TYPE', top_n=100)
+    organization_plot_df = category_freq_table(
+        df_parquet, "ORGANIZATION_TYPE", top_n=100
+    )
 
     organization_bar_plot = px.bar(
         organization_plot_df,
-        x='ORGANIZATION_TYPE',
-        y='percentage',
-        text='percentage',
-        title='Top 15 ORGANIZATION_TYPE Categories',
-        labels={'ORGANIZATION_TYPE': 'Organization Type', 'percentage': 'Share (%)'}
+        x="ORGANIZATION_TYPE",
+        y="percentage",
+        text="percentage",
+        title="Top 15 ORGANIZATION_TYPE Categories",
+        labels={"ORGANIZATION_TYPE": "Organization Type", "percentage": "Share (%)"},
     )
 
-    organization_bar_plot.update_traces(texttemplate='%{text:.2f}%', textposition='outside')
-    organization_bar_plot.update_layout(xaxis_tickangle=-45, yaxis={"categoryorder": "total ascending"})
+    organization_bar_plot.update_traces(
+        texttemplate="%{text:.2f}%", textposition="outside"
+    )
+    organization_bar_plot.update_layout(
+        xaxis_tickangle=-45, yaxis={"categoryorder": "total ascending"}
+    )
     organization_bar_plot.show()
-    return
 
 
 @app.cell(hide_code=True)
@@ -1213,13 +1223,11 @@ def _(mo):
     mo.md(r"""
     #### `OCCUPATION_TYPE`
     """)
-    return
 
 
 @app.cell
 def _(df_parquet):
-    category_freq_table(df_parquet, 'OCCUPATION_TYPE', top_n=15)
-    return
+    category_freq_table(df_parquet, "OCCUPATION_TYPE", top_n=15)
 
 
 @app.cell(hide_code=True)
@@ -1227,13 +1235,11 @@ def _(mo):
     mo.md(r"""
     #### `NAME_TYPE_SUITE`
     """)
-    return
 
 
 @app.cell
 def _(df_parquet):
-    category_freq_table(df_parquet, 'NAME_TYPE_SUITE', top_n=15) 
-    return
+    category_freq_table(df_parquet, "NAME_TYPE_SUITE", top_n=15)
 
 
 @app.cell(hide_code=True)
@@ -1241,13 +1247,11 @@ def _(mo):
     mo.md(r"""
     #### `NAME_INCOME_TYPE`
     """)
-    return
 
 
 @app.cell
 def _(df_parquet):
-    category_freq_table(df_parquet, 'NAME_INCOME_TYPE', top_n=15) 
-    return
+    category_freq_table(df_parquet, "NAME_INCOME_TYPE", top_n=15)
 
 
 @app.cell(hide_code=True)
@@ -1261,7 +1265,6 @@ def _(mo):
 
     - **Implication:** Rare categories may produce unstable estimates when their relationship with the target is analyzed because of their small sample size. Their predictive value should therefore be interpreted together with category support. Rare categories should not be merged or removed automatically before checking their relationship with the target and the behavior of the chosen model.
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -1269,21 +1272,56 @@ def _(mo):
     mo.md(r"""
     ### Anomaly handling
     """)
-    return
 
 
 @app.cell
 def _(pd):
-    anomaly_table = pd.DataFrame({
-        "feature": ["DAYS_EMPLOYED", "AMT_REQ_CREDIT_BUREAU_QRT", "AMT_INCOME_TOTAL", "NONLIVINGAREA_AVG", "FLAG_MOBIL", "FLAG_DOCUMENT_12"],
-        "issue": ["value of 365243 appears 50k+ times", "one extreme value", "extreme outliers", "zero-centered right skew", "almost zero variance, mean around 1 for binary feature", "zero variance, mean around 0 for binary feature"],
-        "interpretation": ["sentinal value for missing data", "isolated suspicious extreme value / possible data error", "extreme outliers may indicate data entry errors or rare cases", "zero-centered right skew may indicate a non-normal distribution", "almost zero variance may indicate a constant feature", "near-zero variance indicates a constant feature"],
-        "planned_action": ["represent as not a number and create flag feature", "keep and investigate", "leave", "leave", "keep for now; evaluate predictive value later", "keep for now; evaluate predictive value later"],
-        "reason": ["large number may affect model performance and create uncertanty in predictions and feature importance", "insufficient evidence to treat it as erroneous", "extreme numbers are not errors, they represent real-world distribution", "boosting are less sensitive for skewed distributions, values are absolutely normal", "affects performance and might not have predictive value", "affects performance and might not have predictive value"]
-    })
+    anomaly_table = pd.DataFrame(
+        {
+            "feature": [
+                "DAYS_EMPLOYED",
+                "AMT_REQ_CREDIT_BUREAU_QRT",
+                "AMT_INCOME_TOTAL",
+                "NONLIVINGAREA_AVG",
+                "FLAG_MOBIL",
+                "FLAG_DOCUMENT_12",
+            ],
+            "issue": [
+                "value of 365243 appears 50k+ times",
+                "one extreme value",
+                "extreme outliers",
+                "zero-centered right skew",
+                "almost zero variance, mean around 1 for binary feature",
+                "zero variance, mean around 0 for binary feature",
+            ],
+            "interpretation": [
+                "sentinal value for missing data",
+                "isolated suspicious extreme value / possible data error",
+                "extreme outliers may indicate data entry errors or rare cases",
+                "zero-centered right skew may indicate a non-normal distribution",
+                "almost zero variance may indicate a constant feature",
+                "near-zero variance indicates a constant feature",
+            ],
+            "planned_action": [
+                "represent as not a number and create flag feature",
+                "keep and investigate",
+                "leave",
+                "leave",
+                "keep for now; evaluate predictive value later",
+                "keep for now; evaluate predictive value later",
+            ],
+            "reason": [
+                "large number may affect model performance and create uncertanty in predictions and feature importance",
+                "insufficient evidence to treat it as erroneous",
+                "extreme numbers are not errors, they represent real-world distribution",
+                "boosting are less sensitive for skewed distributions, values are absolutely normal",
+                "affects performance and might not have predictive value",
+                "affects performance and might not have predictive value",
+            ],
+        }
+    )
 
     anomaly_table
-    return
 
 
 @app.cell(hide_code=True)
@@ -1295,7 +1333,6 @@ def _(mo):
     - **Evidence:** DAYS_EMPLOYED=365243 occurs 55,374 times and is semantically impossible, whereas AMT_REQ_CREDIT_BUREAU_QRT=261 occurs only once and cannot yet be classified as an error. Income and property-area variables show natural right-skewed distributions.
     - **Implication:** Outliers should be handled feature-by-feature. Automatic IQR removal or dropping rare observations would risk removing valid information.
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -1303,7 +1340,6 @@ def _(mo):
     mo.md(r"""
     ## Bivariative analysis
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -1311,49 +1347,55 @@ def _(mo):
     mo.md(r"""
     ### Numeric features against target
     """)
-    return
 
 
 @app.cell
 def _(df_parquet, np):
     df_analysis = df_parquet.copy()
-    df_analysis['DAYS_EMPLOYED'] = (df_analysis['DAYS_EMPLOYED'].replace(365243, np.nan)).astype('float32')
+    df_analysis["DAYS_EMPLOYED"] = (
+        df_analysis["DAYS_EMPLOYED"].replace(365243, np.nan)
+    ).astype("float32")
     return (df_analysis,)
 
 
 @app.cell
 def _(df_analysis, numeric_cols):
-    pearson_corr = df_analysis[numeric_cols].corrwith(df_analysis["TARGET"], method='pearson')
+    pearson_corr = df_analysis[numeric_cols].corrwith(
+        df_analysis["TARGET"], method="pearson"
+    )
 
-    spearman_corr = df_analysis[numeric_cols].corrwith(df_analysis["TARGET"], method='spearman')
+    spearman_corr = df_analysis[numeric_cols].corrwith(
+        df_analysis["TARGET"], method="spearman"
+    )
     return pearson_corr, spearman_corr
 
 
 @app.cell
 def _(numeric_cols, pd, pearson_corr, spearman_corr):
-    target_corr = pd.DataFrame({
-        "feature": numeric_cols,
-        "pearson_corr": pearson_corr,
-        "spearman_corr": spearman_corr
-    })
+    target_corr = pd.DataFrame(
+        {
+            "feature": numeric_cols,
+            "pearson_corr": pearson_corr,
+            "spearman_corr": spearman_corr,
+        }
+    )
 
-    target_corr['abs_pearson_corr'] = target_corr['pearson_corr'].abs()
-    target_corr['abs_spearman_corr'] = target_corr['spearman_corr'].abs()
+    target_corr["abs_pearson_corr"] = target_corr["pearson_corr"].abs()
+    target_corr["abs_spearman_corr"] = target_corr["spearman_corr"].abs()
 
-    target_corr.sort_values(by='abs_spearman_corr', ascending=False).head(15)
+    target_corr.sort_values(by="abs_spearman_corr", ascending=False).head(15)
     return (target_corr,)
 
 
 @app.cell
 def _(target_corr):
-    target_corr.sort_values(by='abs_pearson_corr', ascending=False).head(15)
-    return
+    target_corr.sort_values(by="abs_pearson_corr", ascending=False).head(15)
 
 
 @app.cell
 def _(df_analysis, px):
     def plot_dist_target(feature, df=df_analysis, target="TARGET"):
-    
+
         target_dist_fig = px.histogram(
             df,
             x=feature,
@@ -1393,8 +1435,10 @@ def _(df_analysis, px):
 
 
 @app.function
-def agg_against_target(df, feature, target='TARGET'):
-    agg_df = df.groupby(target)[feature].agg(['mean', 'median', 'std', 'min', 'max', 'count'])
+def agg_against_target(df, feature, target="TARGET"):
+    agg_df = df.groupby(target)[feature].agg(
+        ["mean", "median", "std", "min", "max", "count"]
+    )
     return agg_df
 
 
@@ -1403,25 +1447,21 @@ def _(mo):
     mo.md(r"""
     #### EXT_SOURCE_3
     """)
-    return
 
 
 @app.cell
 def _(plot_dist_target):
-    plot_dist_target('EXT_SOURCE_3')
-    return
+    plot_dist_target("EXT_SOURCE_3")
 
 
 @app.cell
 def _(plot_box_target):
-    plot_box_target('EXT_SOURCE_3')
-    return
+    plot_box_target("EXT_SOURCE_3")
 
 
 @app.cell
 def _(df_analysis):
-    agg_against_target(df_analysis, 'EXT_SOURCE_3')
-    return
+    agg_against_target(df_analysis, "EXT_SOURCE_3")
 
 
 @app.cell(hide_code=True)
@@ -1429,19 +1469,16 @@ def _(mo):
     mo.md(r"""
     #### `DAYS_BIRTH`
     """)
-    return
 
 
 @app.cell
 def _(plot_box_target):
-    plot_box_target('DAYS_BIRTH')
-    return
+    plot_box_target("DAYS_BIRTH")
 
 
 @app.cell
 def _(df_analysis):
-    agg_against_target(df_analysis, 'DAYS_BIRTH')
-    return
+    agg_against_target(df_analysis, "DAYS_BIRTH")
 
 
 @app.cell(hide_code=True)
@@ -1449,19 +1486,16 @@ def _(mo):
     mo.md(r"""
     #### `DAYS_EMPLOYED`
     """)
-    return
 
 
 @app.cell
 def _(df_analysis):
-    agg_against_target(df_analysis, 'DAYS_EMPLOYED')
-    return
+    agg_against_target(df_analysis, "DAYS_EMPLOYED")
 
 
 @app.cell
 def _(plot_box_target):
-    plot_box_target('DAYS_EMPLOYED')
-    return
+    plot_box_target("DAYS_EMPLOYED")
 
 
 @app.cell(hide_code=True)
@@ -1469,13 +1503,11 @@ def _(mo):
     mo.md(r"""
     #### `REGION_RATING_CLIENT_W_CITY`
     """)
-    return
 
 
 @app.cell
 def _(df_analysis):
-    agg_against_target(df_analysis, 'REGION_RATING_CLIENT_W_CITY')
-    return
+    agg_against_target(df_analysis, "REGION_RATING_CLIENT_W_CITY")
 
 
 @app.cell(hide_code=True)
@@ -1483,19 +1515,16 @@ def _(mo):
     mo.md(r"""
     #### `DAYS_LAST_PHONE_CHANGE`
     """)
-    return
 
 
 @app.cell
 def _(df_analysis):
-    agg_against_target(df_analysis, 'DAYS_LAST_PHONE_CHANGE')
-    return
+    agg_against_target(df_analysis, "DAYS_LAST_PHONE_CHANGE")
 
 
 @app.cell
 def _(plot_box_target):
-    plot_box_target('DAYS_LAST_PHONE_CHANGE')
-    return
+    plot_box_target("DAYS_LAST_PHONE_CHANGE")
 
 
 @app.cell(hide_code=True)
@@ -1509,7 +1538,6 @@ def _(mo):
 
     - **Implication:** `EXT_SOURCE_1/2/3` appear to be promising predictors but require an explicit missing-value strategy. Age and employment duration should later be transformed into more interpretable features. Low linear correlation alone is not a reason to remove a feature, since tree-based models can exploit non-linear relationships and feature interactions. These observed patterns are suitable candidates for hypothesis testing in Section 5.
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -1517,30 +1545,37 @@ def _(mo):
     mo.md(r"""
     ### Categorical features against target
     """)
-    return
 
 
 @app.cell
 def _(df_analysis):
-    overal_target_rate =df_analysis['TARGET'].mean() * 100
+    overal_target_rate = df_analysis["TARGET"].mean() * 100
     return (overal_target_rate,)
 
 
 @app.cell
 def _(overal_target_rate, pd):
-    def target_by_category(df: pd.DataFrame, feature: str, target: str = "TARGET") -> pd.DataFrame:
+    def target_by_category(
+        df: pd.DataFrame, feature: str, target: str = "TARGET"
+    ) -> pd.DataFrame:
         target_by_cat = (
             df.groupby(feature, dropna=False, observed=True)[target]
             .agg(target_rate="mean", count="count")
             .reset_index()
         )
 
-        target_by_cat[feature] = target_by_cat[feature].astype(str).replace({"nan": "Missing", "<NA>": "Missing", "None": "Missing"})
-        target_by_cat['rate_diff'] = target_by_cat['target_rate'] - overal_target_rate / 100
-        target_by_cat['abs_rate_diff'] = target_by_cat['rate_diff'].abs()
+        target_by_cat[feature] = (
+            target_by_cat[feature]
+            .astype(str)
+            .replace({"nan": "Missing", "<NA>": "Missing", "None": "Missing"})
+        )
+        target_by_cat["rate_diff"] = (
+            target_by_cat["target_rate"] - overal_target_rate / 100
+        )
+        target_by_cat["abs_rate_diff"] = target_by_cat["rate_diff"].abs()
         target_by_cat["target_rate_pct"] = target_by_cat["target_rate"] * 100
         target_by_cat["category_pct"] = target_by_cat["count"] / len(df) * 100
-    
+
         return target_by_cat.sort_values(by="abs_rate_diff", ascending=False)
 
     return (target_by_category,)
@@ -1548,23 +1583,30 @@ def _(overal_target_rate, pd):
 
 @app.cell
 def _(overal_target_rate, px, target_by_category):
-    def target_by_category_plot(df, feature, target='TARGET'):
-    
+    def target_by_category_plot(df, feature, target="TARGET"):
+
         target_by_cat = target_by_category(df, feature, target)
         target_by_cat = target_by_cat.reset_index()
-    
+
         fig = px.bar(
-            target_by_cat.sort_values(by='target_rate_pct', ascending=False),
-            x='target_rate_pct',
+            target_by_cat.sort_values(by="target_rate_pct", ascending=False),
+            x="target_rate_pct",
             y=feature,
-            orientation='h',
-            text='count',
-            title=f'Default Rate by {feature}',
-            labels={feature: feature, 'target_rate_pct': 'Default Rate (%)'}
+            orientation="h",
+            text="count",
+            title=f"Default Rate by {feature}",
+            labels={feature: feature, "target_rate_pct": "Default Rate (%)"},
         )
-    
-        fig.update_traces(textposition='outside')
-        fig.add_vline(x=overal_target_rate, line_width=2, line_dash='dash', line_color='red', annotation_text=f'Overall Default Rate: {overal_target_rate:.2f}%', annotation_position='top right')
+
+        fig.update_traces(textposition="outside")
+        fig.add_vline(
+            x=overal_target_rate,
+            line_width=2,
+            line_dash="dash",
+            line_color="red",
+            annotation_text=f"Overall Default Rate: {overal_target_rate:.2f}%",
+            annotation_position="top right",
+        )
         fig.show()
 
     return (target_by_category_plot,)
@@ -1578,19 +1620,16 @@ def _():
         "NAME_INCOME_TYPE",
         "NAME_TYPE_SUITE",
     ]
-    return
 
 
 @app.cell
 def _(df_analysis, target_by_category):
-    target_by_category(df_analysis, 'ORGANIZATION_TYPE')
-    return
+    target_by_category(df_analysis, "ORGANIZATION_TYPE")
 
 
 @app.cell
 def _(df_analysis, target_by_category_plot):
-    target_by_category_plot(df_analysis, 'ORGANIZATION_TYPE')
-    return
+    target_by_category_plot(df_analysis, "ORGANIZATION_TYPE")
 
 
 @app.cell(hide_code=True)
@@ -1598,19 +1637,16 @@ def _(mo):
     mo.md(r"""
     #### `NAME_INCOME_TYPE`
     """)
-    return
 
 
 @app.cell
 def _(df_analysis, target_by_category):
-    target_by_category(df_analysis, 'NAME_INCOME_TYPE')
-    return
+    target_by_category(df_analysis, "NAME_INCOME_TYPE")
 
 
 @app.cell
 def _(df_analysis, target_by_category_plot):
-    target_by_category_plot(df_analysis, 'NAME_INCOME_TYPE')
-    return
+    target_by_category_plot(df_analysis, "NAME_INCOME_TYPE")
 
 
 @app.cell(hide_code=True)
@@ -1618,19 +1654,16 @@ def _(mo):
     mo.md(r"""
     #### `OCCUPATION_TYPE`
     """)
-    return
 
 
 @app.cell
 def _(df_analysis, target_by_category):
-    target_by_category(df_analysis, 'OCCUPATION_TYPE')
-    return
+    target_by_category(df_analysis, "OCCUPATION_TYPE")
 
 
 @app.cell
 def _(df_analysis, target_by_category_plot):
-    target_by_category_plot(df_analysis, 'OCCUPATION_TYPE')
-    return
+    target_by_category_plot(df_analysis, "OCCUPATION_TYPE")
 
 
 @app.cell(hide_code=True)
@@ -1638,19 +1671,16 @@ def _(mo):
     mo.md(r"""
     #### `NAME_TYPE_SUITE`
     """)
-    return
 
 
 @app.cell
 def _(df_analysis, target_by_category):
-    target_by_category(df_analysis, 'NAME_TYPE_SUITE')
-    return
+    target_by_category(df_analysis, "NAME_TYPE_SUITE")
 
 
 @app.cell
 def _(df_analysis, target_by_category_plot):
-    target_by_category_plot(df_analysis, 'NAME_TYPE_SUITE')
-    return
+    target_by_category_plot(df_analysis, "NAME_TYPE_SUITE")
 
 
 @app.cell(hide_code=True)
@@ -1664,7 +1694,6 @@ def _(mo):
 
     - **Implication:** Categorical variables may provide predictive signal through both elevated and reduced default risk. Target rate must always be interpreted together with category support because extreme rates in small groups are unstable. These associations should be formally assessed with categorical statistical tests in Section 5 rather than using target rate alone for feature selection.
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -1672,28 +1701,28 @@ def _(mo):
     mo.md(r"""
     ### Correlation and multicollinearity
     """)
-    return
 
 
 @app.cell
 def _(df_analysis):
-    corr_cols = (df_analysis.select_dtypes(include='number')
-                 .drop(columns=['TARGET', 'SK_ID_CURR'])
-                 .columns.tolist())
+    corr_cols = (
+        df_analysis.select_dtypes(include="number")
+        .drop(columns=["TARGET", "SK_ID_CURR"])
+        .columns.tolist()
+    )
     return (corr_cols,)
 
 
 @app.cell
 def _(corr_cols, df_analysis):
-    corr_matrix = df_analysis[corr_cols].corr(method='pearson')
+    corr_matrix = df_analysis[corr_cols].corr(method="pearson")
     return (corr_matrix,)
 
 
 @app.cell
 def _(corr_matrix, np):
     corr_pairs = (
-        corr_matrix
-        .where(np.triu(np.ones(corr_matrix.shape), k=1).astype(bool))
+        corr_matrix.where(np.triu(np.ones(corr_matrix.shape), k=1).astype(bool))
         .stack()
         .reset_index()
     )
@@ -1708,7 +1737,6 @@ def _(corr_matrix, np):
     )
 
     corr_pairs.head(20)
-    return
 
 
 @app.cell(hide_code=True)
@@ -1720,7 +1748,6 @@ def _(mo):
     - **Evidence:** The top feature pairs have correlations close to 0.99, mostly among related representations such as `*_AVG`, `*_MEDI`, and `*_MODE`.
     - **Implication:** The dataset contains substantial redundant information. This is not necessarily harmful for tree-based boosting, but redundant features may complicate interpretation and increase computational cost. Feature redundancy should therefore be considered later during feature selection rather than handled aggressively during EDA.
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -1728,19 +1755,18 @@ def _(mo):
     mo.md(r"""
     ## Hypothesis testing
     """)
-    return
 
 
 @app.cell
 def _(mannwhitneyu):
-    def numeric_stattest(df, feature, target='TARGET'):
+    def numeric_stattest(df, feature, target="TARGET"):
         group_0 = df[df[target] == 0][feature].dropna()
         group_1 = df[df[target] == 1][feature].dropna()
-    
-        stat, p_value = mannwhitneyu(group_0, group_1, alternative='two-sided')
-    
-        print('Statistic:', stat)
-        print('P-Value:', p_value)
+
+        stat, p_value = mannwhitneyu(group_0, group_1, alternative="two-sided")
+
+        print("Statistic:", stat)
+        print("P-Value:", p_value)
         return stat, p_value
 
     return (numeric_stattest,)
@@ -1748,15 +1774,17 @@ def _(mannwhitneyu):
 
 @app.cell
 def _(chi2_contingency, pd):
-    def categorical_stattest(df, feature, target='TARGET'):
-        contingency_table = pd.crosstab(df[feature].astype("string").fillna('MISSING'), df[target])
-    
+    def categorical_stattest(df, feature, target="TARGET"):
+        contingency_table = pd.crosstab(
+            df[feature].astype("string").fillna("MISSING"), df[target]
+        )
+
         chi2, p_value, dof, expected = chi2_contingency(contingency_table)
-    
-        print('Chi-Squared Statistic:', chi2)
-        print('P-Value:', p_value)
-        print('Degrees of Freedom:', dof)
-        print('Expected Frequencies:\n', expected)
+
+        print("Chi-Squared Statistic:", chi2)
+        print("P-Value:", p_value)
+        print("Degrees of Freedom:", dof)
+        print("Expected Frequencies:\n", expected)
         return chi2, p_value, dof, expected
 
     return (categorical_stattest,)
@@ -1777,13 +1805,11 @@ def _(mo):
 
     **Planned test:** Mann-Whitney U
     """)
-    return
 
 
 @app.cell
 def _(df_analysis, numeric_stattest):
-    numeric_stattest(df_analysis, 'EXT_SOURCE_3')
-    return
+    numeric_stattest(df_analysis, "EXT_SOURCE_3")
 
 
 @app.cell(hide_code=True)
@@ -1801,13 +1827,11 @@ def _(mo):
 
     **Planned test:** Mann-Whitney U
     """)
-    return
 
 
 @app.cell
 def _(df_analysis, numeric_stattest):
-    numeric_stattest(df_analysis, 'DAYS_BIRTH')
-    return
+    numeric_stattest(df_analysis, "DAYS_BIRTH")
 
 
 @app.cell(hide_code=True)
@@ -1825,13 +1849,11 @@ def _(mo):
 
     **Planned test:** Mann-Whitney U
     """)
-    return
 
 
 @app.cell
 def _(df_analysis, numeric_stattest):
-    numeric_stattest(df_analysis, 'DAYS_EMPLOYED')
-    return
+    numeric_stattest(df_analysis, "DAYS_EMPLOYED")
 
 
 @app.cell(hide_code=True)
@@ -1849,13 +1871,11 @@ def _(mo):
 
     **Planned test:** Chi-Square
     """)
-    return
 
 
 @app.cell
 def _(categorical_stattest, df_analysis):
-    categorical_stattest(df_analysis, 'OCCUPATION_TYPE')
-    return
+    categorical_stattest(df_analysis, "OCCUPATION_TYPE")
 
 
 @app.cell(hide_code=True)
@@ -1873,25 +1893,42 @@ def _(mo):
 
     **Planned test:** Chi-Square
     """)
-    return
 
 
 @app.cell
 def _(categorical_stattest, df_analysis):
-    categorical_stattest(df_analysis, 'NAME_TYPE_SUITE')
-    return
+    categorical_stattest(df_analysis, "NAME_TYPE_SUITE")
 
 
 @app.cell
 def _(pd):
-    stat_results = pd.DataFrame({
-        "feature": ["EXT_SOURCE_3", "DAYS_BIRTH", "DAYS_EMPLOYED", "OCCUPATION_TYPE", "NAME_TYPE_SUITE"],
-        "test_type": ["Mann-Whitney U", "Mann-Whitney U", "Mann-Whitney U", "Chi-Squared", "Chi-Squared"],
-        "statistic": [2.958252e+09, 2926354691.5, 2.1000069e+09, 1975.0827518430256, 45.190053728369556],
-        "p_value": [0.0, 0.0, 0.0, 0.0, 1.2562030207008644e-07]
-    })
+    stat_results = pd.DataFrame(
+        {
+            "feature": [
+                "EXT_SOURCE_3",
+                "DAYS_BIRTH",
+                "DAYS_EMPLOYED",
+                "OCCUPATION_TYPE",
+                "NAME_TYPE_SUITE",
+            ],
+            "test_type": [
+                "Mann-Whitney U",
+                "Mann-Whitney U",
+                "Mann-Whitney U",
+                "Chi-Squared",
+                "Chi-Squared",
+            ],
+            "statistic": [
+                2.958252e09,
+                2926354691.5,
+                2.1000069e09,
+                1975.0827518430256,
+                45.190053728369556,
+            ],
+            "p_value": [0.0, 0.0, 0.0, 0.0, 1.2562030207008644e-07],
+        }
+    )
     stat_results
-    return
 
 
 @app.cell(hide_code=True)
@@ -1899,7 +1936,6 @@ def _(mo):
     mo.md(r"""
     ### Effect size
     """)
-    return
 
 
 @app.function
@@ -1916,15 +1952,15 @@ def rank_biserial_effect(df, feature, target, u_stat):
 @app.cell
 def _(chi2_contingency, np, pd):
     def cramers_v(df, feature, target):
-        contingency_table = pd.crosstab(df[feature].astype("string").fillna('MISSING'), df[target])
+        contingency_table = pd.crosstab(
+            df[feature].astype("string").fillna("MISSING"), df[target]
+        )
         chi2, _, _, _ = chi2_contingency(contingency_table)
 
         n = contingency_table.to_numpy().sum()
         r, c = contingency_table.shape
 
-        return np.sqrt(
-            chi2 / (n * min(r - 1, c - 1))
-        )
+        return np.sqrt(chi2 / (n * min(r - 1, c - 1)))
 
     return (cramers_v,)
 
@@ -1934,13 +1970,11 @@ def _(mo):
     mo.md(r"""
     #### `EXT_SOURCE_3`
     """)
-    return
 
 
 @app.cell
 def _(df_analysis):
-    print(rank_biserial_effect(df_analysis, 'EXT_SOURCE_3', 'TARGET', 2.958252e+09))
-    return
+    print(rank_biserial_effect(df_analysis, "EXT_SOURCE_3", "TARGET", 2.958252e09))
 
 
 @app.cell(hide_code=True)
@@ -1948,13 +1982,11 @@ def _(mo):
     mo.md(r"""
     #### `DAYS_BIRTH`
     """)
-    return
 
 
 @app.cell
 def _(df_analysis):
-    print(rank_biserial_effect(df_analysis, 'DAYS_BIRTH', 'TARGET', 2926354691.5))
-    return
+    print(rank_biserial_effect(df_analysis, "DAYS_BIRTH", "TARGET", 2926354691.5))
 
 
 @app.cell(hide_code=True)
@@ -1962,13 +1994,11 @@ def _(mo):
     mo.md(r"""
     #### `DAYS_EMPLOYED`
     """)
-    return
 
 
 @app.cell
 def _(df_analysis):
-    print(rank_biserial_effect(df_analysis, 'DAYS_EMPLOYED', 'TARGET', 2100006900))
-    return
+    print(rank_biserial_effect(df_analysis, "DAYS_EMPLOYED", "TARGET", 2100006900))
 
 
 @app.cell(hide_code=True)
@@ -1976,13 +2006,11 @@ def _(mo):
     mo.md(r"""
     #### `OCCUPATION_TYPE`
     """)
-    return
 
 
 @app.cell
 def _(cramers_v, df_analysis):
-    print(cramers_v(df_analysis, 'OCCUPATION_TYPE', 'TARGET'))
-    return
+    print(cramers_v(df_analysis, "OCCUPATION_TYPE", "TARGET"))
 
 
 @app.cell(hide_code=True)
@@ -1990,26 +2018,37 @@ def _(mo):
     mo.md(r"""
     #### `NAME_TYPE_SUITE`
     """)
-    return
 
 
 @app.cell
 def _(cramers_v, df_analysis):
-    print(cramers_v(df_analysis, 'NAME_TYPE_SUITE', 'TARGET'))
-    return
+    print(cramers_v(df_analysis, "NAME_TYPE_SUITE", "TARGET"))
 
 
 @app.cell
 def _(pd):
-    effect_results = pd.DataFrame({
-        "feature": ["EXT_SOURCE_3", "DAYS_BIRTH", "DAYS_EMPLOYED", "OCCUPATION_TYPE", "NAME_TYPE_SUITE"],
-        "test_type": ["Mann-Whitney U", "Mann-Whitney U", "Mann-Whitney U", "Chi-Squared", "Chi-Squared"],
-        "effect_size": [-0.3588, 0.1660, 0.1648, 0.0801, 0.0121],
-        "p_value": [0.0, 0.0, 0.0, 0.0, 1.2562030207008644e-07],
-        "interpretation": ["medium", "small", "small", "small", "negligible"]
-    })
+    effect_results = pd.DataFrame(
+        {
+            "feature": [
+                "EXT_SOURCE_3",
+                "DAYS_BIRTH",
+                "DAYS_EMPLOYED",
+                "OCCUPATION_TYPE",
+                "NAME_TYPE_SUITE",
+            ],
+            "test_type": [
+                "Mann-Whitney U",
+                "Mann-Whitney U",
+                "Mann-Whitney U",
+                "Chi-Squared",
+                "Chi-Squared",
+            ],
+            "effect_size": [-0.3588, 0.1660, 0.1648, 0.0801, 0.0121],
+            "p_value": [0.0, 0.0, 0.0, 0.0, 1.2562030207008644e-07],
+            "interpretation": ["medium", "small", "small", "small", "negligible"],
+        }
+    )
     effect_results
-    return
 
 
 @app.cell(hide_code=True)
@@ -2023,7 +2062,6 @@ def _(mo):
 
     - **Implication:** Statistical significance alone is insufficient for feature evaluation, especially with a large dataset. Effect size must be considered together with p-value, sample size, model validation performance, and domain relevance. Features with tiny p-values can still have negligible practical importance.
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -2031,29 +2069,28 @@ def _(mo):
     mo.md(r"""
     ## Feature Engineering
     """)
-    return
 
 
 @app.function
 def features(df, main_df):
     df = df.copy()
 
-    df['AGE_YEARS'] = (-df['DAYS_BIRTH'] / 365.25)
-    df['EMPLOYED_YEARS'] = -(df['DAYS_EMPLOYED'] / 365.25)
-    df['AGE_AT_CURRENT_EMPLOYMENT_START'] = df['AGE_YEARS'] - df['EMPLOYED_YEARS']
-    df['DAYS_EMPLOYED_ANOMALY'] = (main_df['DAYS_EMPLOYED'] == 365243).astype('int8')
+    df["AGE_YEARS"] = -df["DAYS_BIRTH"] / 365.25
+    df["EMPLOYED_YEARS"] = -(df["DAYS_EMPLOYED"] / 365.25)
+    df["AGE_AT_CURRENT_EMPLOYMENT_START"] = df["AGE_YEARS"] - df["EMPLOYED_YEARS"]
+    df["DAYS_EMPLOYED_ANOMALY"] = (main_df["DAYS_EMPLOYED"] == 365243).astype("int8")
 
-    df['CREDIT_INCOME_RATIO'] = df['AMT_CREDIT'] / df['AMT_INCOME_TOTAL']
-    df['ANNUITY_INCOME_RATIO'] = df['AMT_ANNUITY'] / df['AMT_INCOME_TOTAL']
-    df['ANNUITY_CREDIT_RATIO'] = df['AMT_ANNUITY'] / df['AMT_CREDIT']
-    df['EMPLOYED_AGE_RATIO'] = (df['EMPLOYED_YEARS'] / df['AGE_YEARS'])
+    df["CREDIT_INCOME_RATIO"] = df["AMT_CREDIT"] / df["AMT_INCOME_TOTAL"]
+    df["ANNUITY_INCOME_RATIO"] = df["AMT_ANNUITY"] / df["AMT_INCOME_TOTAL"]
+    df["ANNUITY_CREDIT_RATIO"] = df["AMT_ANNUITY"] / df["AMT_CREDIT"]
+    df["EMPLOYED_AGE_RATIO"] = df["EMPLOYED_YEARS"] / df["AGE_YEARS"]
 
-    ext_cols = ['EXT_SOURCE_1', 'EXT_SOURCE_2', 'EXT_SOURCE_3']
-    df['EXT_SOURCES_MEAN'] = df[ext_cols].mean(axis=1)
-    df['EXT_SOURCES_STD'] = df[ext_cols].std(axis=1)
-    df['EXT_SOURCES_MIN'] = df[ext_cols].min(axis=1)
-    df['EXT_SOURCES_MAX'] = df[ext_cols].max(axis=1)
-    df['EXT_SOURCES_COUNT'] = df[ext_cols].notna().sum(axis=1)
+    ext_cols = ["EXT_SOURCE_1", "EXT_SOURCE_2", "EXT_SOURCE_3"]
+    df["EXT_SOURCES_MEAN"] = df[ext_cols].mean(axis=1)
+    df["EXT_SOURCES_STD"] = df[ext_cols].std(axis=1)
+    df["EXT_SOURCES_MIN"] = df[ext_cols].min(axis=1)
+    df["EXT_SOURCES_MAX"] = df[ext_cols].max(axis=1)
+    df["EXT_SOURCES_COUNT"] = df[ext_cols].notna().sum(axis=1)
 
     return df
 
@@ -2067,10 +2104,19 @@ def _(df_analysis, df_parquet):
 @app.cell
 def _():
     new_features = [
-        'AGE_YEARS', 'EMPLOYED_YEARS', 'AGE_AT_CURRENT_EMPLOYMENT_START', 'DAYS_EMPLOYED_ANOMALY',
-        'CREDIT_INCOME_RATIO', 'ANNUITY_INCOME_RATIO', 'ANNUITY_CREDIT_RATIO',
-        'EMPLOYED_AGE_RATIO', 'EXT_SOURCES_MEAN', 'EXT_SOURCES_STD',
-        'EXT_SOURCES_MIN', 'EXT_SOURCES_MAX', 'EXT_SOURCES_COUNT'
+        "AGE_YEARS",
+        "EMPLOYED_YEARS",
+        "AGE_AT_CURRENT_EMPLOYMENT_START",
+        "DAYS_EMPLOYED_ANOMALY",
+        "CREDIT_INCOME_RATIO",
+        "ANNUITY_INCOME_RATIO",
+        "ANNUITY_CREDIT_RATIO",
+        "EMPLOYED_AGE_RATIO",
+        "EXT_SOURCES_MEAN",
+        "EXT_SOURCES_STD",
+        "EXT_SOURCES_MIN",
+        "EXT_SOURCES_MAX",
+        "EXT_SOURCES_COUNT",
     ]
     return (new_features,)
 
@@ -2078,13 +2124,11 @@ def _():
 @app.cell
 def _(df_fe, new_features):
     df_fe[new_features].describe().T
-    return
 
 
 @app.cell
 def _(df_fe, new_features):
     df_fe[new_features].isna().sum()
-    return
 
 
 @app.cell(hide_code=True)
@@ -2092,7 +2136,6 @@ def _(mo):
     mo.md(r"""
     ### Evaluation of engineered features
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -2100,27 +2143,27 @@ def _(mo):
     mo.md(r"""
     #### Numeric
     """)
-    return
 
 
 @app.cell
 def _(df_fe, new_features, pd):
-    fe_corr = pd.DataFrame({
-        "pearson": df_fe[new_features].corrwith(
-            df_fe["TARGET"],
-            method="pearson",
-        ),
-        "spearman": df_fe[new_features].corrwith(
-            df_fe["TARGET"],
-            method="spearman",
-        ),
-    })
+    fe_corr = pd.DataFrame(
+        {
+            "pearson": df_fe[new_features].corrwith(
+                df_fe["TARGET"],
+                method="pearson",
+            ),
+            "spearman": df_fe[new_features].corrwith(
+                df_fe["TARGET"],
+                method="spearman",
+            ),
+        }
+    )
 
     fe_corr["abs_pearson"] = fe_corr["pearson"].abs()
     fe_corr["abs_spearman"] = fe_corr["spearman"].abs()
 
     fe_corr.sort_values("abs_spearman", ascending=False)
-    return
 
 
 @app.cell(hide_code=True)
@@ -2128,27 +2171,16 @@ def _(mo):
     mo.md(r"""
     #### Discrete
     """)
-    return
 
 
 @app.cell
 def _(df_fe):
-    (
-        df_fe
-        .groupby("EXT_SOURCES_COUNT")["TARGET"]
-        .agg(["mean", "count"])
-    )
-    return
+    (df_fe.groupby("EXT_SOURCES_COUNT")["TARGET"].agg(["mean", "count"]))
 
 
 @app.cell
 def _(df_fe):
-    (
-        df_fe
-        .groupby("DAYS_EMPLOYED_ANOMALY")["TARGET"]
-        .agg(["mean", "count"])
-    )
-    return
+    (df_fe.groupby("DAYS_EMPLOYED_ANOMALY")["TARGET"].agg(["mean", "count"]))
 
 
 @app.cell(hide_code=True)
@@ -2162,7 +2194,6 @@ def _(mo):
 
     - **Implication:** Aggregating semantically related features can create additional predictive signal, and structured missingness should be preserved through explicit indicator features when appropriate. Weak marginal correlation of engineered ratio features is not sufficient evidence to remove them; their incremental value should ultimately be evaluated through cross-validation.
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -2170,7 +2201,6 @@ def _(mo):
     mo.md(r"""
     ## Final decisions before modeling
     """)
-    return
 
 
 @app.cell
@@ -2186,15 +2216,19 @@ def _(mo):
     mo.md(r"""
     ### Categorical missingness
     """)
-    return
 
 
 @app.cell
 def _(df_model, pd):
-    categorical = df_model.select_dtypes(include=["category", "object", "string"]).columns.tolist()
+    categorical = df_model.select_dtypes(
+        include=["category", "object", "string"]
+    ).columns.tolist()
 
     for col in categorical:
-        if isinstance(df_model[col].dtype, pd.CategoricalDtype) and "__MISSING__" not in df_model[col].cat.categories:
+        if (
+            isinstance(df_model[col].dtype, pd.CategoricalDtype)
+            and "__MISSING__" not in df_model[col].cat.categories
+        ):
             df_model[col] = df_model[col].cat.add_categories("__MISSING__")
 
         df_model[col] = df_model[col].fillna("__MISSING__")
@@ -2206,7 +2240,6 @@ def _(mo):
     mo.md(r"""
     ### Housing `AVG/MEDI/MODE`
     """)
-    return
 
 
 @app.cell
@@ -2225,11 +2258,7 @@ def _(df_model):
 
 @app.cell
 def _(bases):
-    housing_groups = {
-        base: cols
-        for base, cols in bases.items()
-        if len(cols) == 3
-    }
+    housing_groups = {base: cols for base, cols in bases.items() if len(cols) == 3}
     return (housing_groups,)
 
 
@@ -2246,11 +2275,13 @@ def _(df_model, housing_groups, np, pd):
             corr.iloc[1, 2],
         ]
 
-        housing_redundancy.append({
-            "base": base_group,
-            "min_pair_corr": min(pair_corrs),
-            "mean_pair_corr": np.mean(pair_corrs),
-        })
+        housing_redundancy.append(
+            {
+                "base": base_group,
+                "min_pair_corr": min(pair_corrs),
+                "mean_pair_corr": np.mean(pair_corrs),
+            }
+        )
 
     housing_redundancy = pd.DataFrame(housing_redundancy)
     return (housing_redundancy,)
@@ -2262,7 +2293,6 @@ def _(housing_redundancy):
         "min_pair_corr",
         ascending=False,
     )
-    return
 
 
 @app.cell
@@ -2286,7 +2316,8 @@ def _(df_model, housing_redundancy):
 @app.cell
 def _(df_fe):
     housing_cols = [
-        col for col in df_fe.columns
+        col
+        for col in df_fe.columns
         if any(
             token in col
             for token in [
@@ -2312,18 +2343,12 @@ def _(df_fe):
 
 @app.cell
 def _(df_fe, df_model, housing_cols):
-    df_model["HOUSING_INFO_MISSING_PCT"] = (
-        df_fe[housing_cols]
-        .isna()
-        .mean(axis=1)
-    )
-    return
+    df_model["HOUSING_INFO_MISSING_PCT"] = df_fe[housing_cols].isna().mean(axis=1)
 
 
 @app.cell
 def _(df_model, housing_drop):
     df_model.drop(columns=housing_drop, inplace=True)
-    return
 
 
 @app.cell
@@ -2332,10 +2357,7 @@ def _(categorical, df_model, housing_drop, np):
     print("Missing cells:", df_model.isna().sum().sum())
     print("Categorical columns:", len(categorical))
     print("Housing columns dropped:", len(housing_drop))
-    print("Inf values:", np.isinf(
-        df_model.select_dtypes(include="number")
-    ).sum().sum())
-    return
+    print("Inf values:", np.isinf(df_model.select_dtypes(include="number")).sum().sum())
 
 
 @app.cell(hide_code=True)
@@ -2349,7 +2371,6 @@ def _(mo):
 
     - **Implication:** Highly redundant housing features can be removed without discarding the underlying information represented by each feature family, reducing dimensionality and simplifying interpretation. Remaining missing values are intentionally preserved because several missingness patterns were shown to be structured and potentially informative, and CatBoost can handle numerical missing values natively. No global outlier clipping or imputation is applied before the baseline model.
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -2357,7 +2378,6 @@ def _(mo):
     mo.md(r"""
     ### Data types and export
     """)
-    return
 
 
 @app.cell
@@ -2382,41 +2402,27 @@ def _(df_final, pd):
             df_final[numeric_col],
             downcast="float",
         )
-    return
 
 
 @app.cell
 def _(df_final):
-    df_final.select_dtypes(
-        include=["category", "object", "string"]
-    ).dtypes
-    return
+    df_final.select_dtypes(include=["category", "object", "string"]).dtypes
 
 
 @app.cell
 def _(df_final):
-    df_final.select_dtypes(
-        include=["category", "object", "string"]
-    ).isna().sum()
-    return
+    df_final.select_dtypes(include=["category", "object", "string"]).isna().sum()
 
 
 @app.cell
 def _(df_final, np):
     numeric_final = df_final.select_dtypes(include="number")
 
-    print(
-        "Inf:",
-        np.isinf(numeric_final).sum().sum()
-    )
+    print("Inf:", np.isinf(numeric_final).sum().sum())
 
-    print(
-        "Columns:",
-        df_final.shape[1]
-    )
+    print("Columns:", df_final.shape[1])
 
     df_final.dtypes.value_counts()
-    return
 
 
 @app.cell
@@ -2430,9 +2436,7 @@ def _(df_final, ids, pd, y):
         axis=1,
     )
 
-    X_model = model_dataset.drop(
-        columns=["SK_ID_CURR", "TARGET"]
-    )
+    X_model = model_dataset.drop(columns=["SK_ID_CURR", "TARGET"])
 
     y_model = model_dataset["TARGET"]
     return (model_dataset,)
@@ -2456,7 +2460,6 @@ def _(FINAL_PATH, pd):
 
     print(check_df.shape)
     check_df.head()
-    return
 
 
 @app.cell(hide_code=True)
@@ -2526,7 +2529,6 @@ def _(mo):
     - No global IQR clipping, row deletion, median imputation, scaling, or removal of rare categories was applied.
     - The final modeling dataset contains 307,511 rows and 106 predictor columns, plus `SK_ID_CURR` and `TARGET`, with no infinite values.
     """)
-    return
 
 
 if __name__ == "__main__":

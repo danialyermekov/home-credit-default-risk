@@ -58,14 +58,26 @@ def build_bureau_features(
     bureau_safe = bureau.loc[bureau["DAYS_CREDIT_UPDATE"] <= 0].copy()
 
     # Credit status flags
-    bureau_safe["BUREAU_IS_ACTIVE"] = bureau_safe["CREDIT_ACTIVE"].eq("Active").astype("int8")
-    bureau_safe["BUREAU_IS_CLOSED"] = bureau_safe["CREDIT_ACTIVE"].eq("Closed").astype("int8")
-    bureau_safe["BUREAU_IS_SOLD"] = bureau_safe["CREDIT_ACTIVE"].eq("Sold").astype("int8")
+    bureau_safe["BUREAU_IS_ACTIVE"] = (
+        bureau_safe["CREDIT_ACTIVE"].eq("Active").astype("int8")
+    )
+    bureau_safe["BUREAU_IS_CLOSED"] = (
+        bureau_safe["CREDIT_ACTIVE"].eq("Closed").astype("int8")
+    )
+    bureau_safe["BUREAU_IS_SOLD"] = (
+        bureau_safe["CREDIT_ACTIVE"].eq("Sold").astype("int8")
+    )
 
     # Recency window flags
-    bureau_safe["BUREAU_CREDIT_LAST_180D"] = bureau_safe["DAYS_CREDIT"].ge(-180).astype("int8")
-    bureau_safe["BUREAU_CREDIT_LAST_365D"] = bureau_safe["DAYS_CREDIT"].ge(-365).astype("int8")
-    bureau_safe["BUREAU_CREDIT_LAST_730D"] = bureau_safe["DAYS_CREDIT"].ge(-730).astype("int8")
+    bureau_safe["BUREAU_CREDIT_LAST_180D"] = (
+        bureau_safe["DAYS_CREDIT"].ge(-180).astype("int8")
+    )
+    bureau_safe["BUREAU_CREDIT_LAST_365D"] = (
+        bureau_safe["DAYS_CREDIT"].ge(-365).astype("int8")
+    )
+    bureau_safe["BUREAU_CREDIT_LAST_730D"] = (
+        bureau_safe["DAYS_CREDIT"].ge(-730).astype("int8")
+    )
 
     features = (
         bureau_safe.groupby("SK_ID_CURR")

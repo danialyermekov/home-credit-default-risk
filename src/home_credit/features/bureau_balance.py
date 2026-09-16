@@ -40,7 +40,8 @@ def build_bureau_balance_features(
     bureau_balance: pd.DataFrame,
     bureau: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
-    """Compute accepted dynamic bureau_balance features aggregated by applicant (SK_ID_CURR).
+    """Compute accepted dynamic bureau_balance features
+        aggregated by applicant (SK_ID_CURR).
 
     Parameters
     ----------
@@ -113,8 +114,7 @@ def build_bureau_balance_features(
     # Delinquency recency
     delinquent = x.loc[x["BBX_DELINQUENT"] == 1]
     last_delinquency = (
-        delinquent
-        .groupby(["SK_ID_CURR", "SK_ID_BUREAU"])["MONTHS_BALANCE"]
+        delinquent.groupby(["SK_ID_CURR", "SK_ID_BUREAU"])["MONTHS_BALANCE"]
         .max()
         .rename("BBX_LAST_DELINQUENCY_MONTH")
         .reset_index()
@@ -138,7 +138,10 @@ def build_bureau_balance_features(
     client = (
         account.groupby("SK_ID_CURR")
         .agg(
-            BBX_RECENT_DELINQUENT_ACCOUNT_SHARE=("BBX_RECENT_DELINQUENT_ACCOUNT", "mean"),
+            BBX_RECENT_DELINQUENT_ACCOUNT_SHARE=(
+                "BBX_RECENT_DELINQUENT_ACCOUNT",
+                "mean",
+            ),
             BBX_MEAN_RECENT6_DELINQ_SHARE=("BBX_RECENT6_DELINQ_SHARE", "mean"),
             BBX_MAX_RECENT6_DELINQ_SHARE=("BBX_RECENT6_DELINQ_SHARE", "max"),
             BBX_MEAN_RECENT12_DELINQ_SHARE=("BBX_RECENT12_DELINQ_SHARE", "mean"),

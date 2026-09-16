@@ -7,8 +7,9 @@ app = marimo.App()
 @app.cell
 def _():
     from pathlib import Path
-    import pandas as pd
+
     import numpy as np
+    import pandas as pd
 
     DATA_DIR = Path("data")
     RAW_DATA_DIR = DATA_DIR / "raw"
@@ -259,7 +260,6 @@ def _(mo):
 
     This is a limitation of the available dataset, not evidence that the real production process is IID.
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -276,7 +276,6 @@ def _(mo):
     - Historical tables will be aggregated to one row per `SK_ID_CURR`; folds belong to application rows, not individual historical events.
     - The main offline validation assumption is therefore approximately IID future applications, using fixed stratified application-level folds.
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -284,7 +283,6 @@ def _(mo):
     mo.md(r"""
     # Bureau
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -292,7 +290,6 @@ def _(mo):
     mo.md(r"""
     ## Grain
     """)
-    return
 
 
 @app.cell
@@ -313,7 +310,6 @@ def _(bureau):
         "Duplicated SK_ID_BUREAU:",
         bureau["SK_ID_BUREAU"].duplicated().sum(),
     )
-    return
 
 
 @app.cell(hide_code=True)
@@ -321,25 +317,21 @@ def _(mo):
     mo.md(r"""
     ## Structure
     """)
-    return
 
 
 @app.cell
 def _(bureau):
     bureau.head()
-    return
 
 
 @app.cell
 def _(bureau):
     bureau.dtypes
-    return
 
 
 @app.cell
 def _(bureau):
     bureau.columns.tolist()
-    return
 
 
 @app.cell(hide_code=True)
@@ -347,21 +339,13 @@ def _(mo):
     mo.md(r"""
     ## Loan count per application
     """)
-    return
 
 
 @app.cell
 def _(bureau):
-    bureau_records_per_application = (
-        bureau
-        .groupby("SK_ID_CURR")
-        .size()
-    )
+    bureau_records_per_application = bureau.groupby("SK_ID_CURR").size()
 
-    bureau_records_per_application.describe(
-        percentiles=[0.5, 0.75, 0.9, 0.95, 0.99]
-    )
-    return
+    bureau_records_per_application.describe(percentiles=[0.5, 0.75, 0.9, 0.95, 0.99])
 
 
 @app.cell
@@ -377,14 +361,12 @@ def _(mo):
     mo.md(r"""
     ## Missingness
     """)
-    return
 
 
 @app.cell
 def _(bureau):
     bureau_missing = (
-        bureau
-        .isna()
+        bureau.isna()
         .mean()
         .sort_values(ascending=False)
         .rename("missing_rate")
@@ -392,7 +374,6 @@ def _(bureau):
     )
 
     bureau_missing
-    return
 
 
 @app.cell(hide_code=True)
@@ -400,7 +381,6 @@ def _(mo):
     mo.md(r"""
     ## Categorical
     """)
-    return
 
 
 @app.cell
@@ -418,12 +398,7 @@ def _(bureau, bureau_categorical):
     for col in bureau_categorical:
         print(f"\n=== {col} ===")
 
-        print(
-            bureau[col]
-            .value_counts(dropna=False)
-            .head(20)
-        )
-    return
+        print(bureau[col].value_counts(dropna=False).head(20))
 
 
 @app.cell(hide_code=True)
@@ -431,7 +406,6 @@ def _(mo):
     mo.md(r"""
     ## Time-related
     """)
-    return
 
 
 @app.cell
@@ -461,7 +435,6 @@ def _(TIME_COLUMNS, bureau):
             "missing:",
             bureau[time_col].isna().sum(),
         )
-    return
 
 
 @app.cell(hide_code=True)
@@ -469,30 +442,26 @@ def _(mo):
     mo.md(r"""
     ### `DAYS_CREDIT_UPDATE` > 0
     """)
-    return
 
 
 @app.cell
 def _(bureau):
-    future_credit_update = (
-        bureau.loc[
-            bureau["DAYS_CREDIT_UPDATE"] > 0,
-            [
-                "SK_ID_CURR",
-                "SK_ID_BUREAU",
-                "CREDIT_ACTIVE",
-                "CREDIT_TYPE",
-                "DAYS_CREDIT",
-                "DAYS_CREDIT_ENDDATE",
-                "DAYS_ENDDATE_FACT",
-                "DAYS_CREDIT_UPDATE",
-                "AMT_CREDIT_SUM",
-                "AMT_CREDIT_SUM_DEBT",
-                "AMT_CREDIT_SUM_OVERDUE",
-            ],
-        ]
-        .sort_values("DAYS_CREDIT_UPDATE", ascending=False)
-    )
+    future_credit_update = bureau.loc[
+        bureau["DAYS_CREDIT_UPDATE"] > 0,
+        [
+            "SK_ID_CURR",
+            "SK_ID_BUREAU",
+            "CREDIT_ACTIVE",
+            "CREDIT_TYPE",
+            "DAYS_CREDIT",
+            "DAYS_CREDIT_ENDDATE",
+            "DAYS_ENDDATE_FACT",
+            "DAYS_CREDIT_UPDATE",
+            "AMT_CREDIT_SUM",
+            "AMT_CREDIT_SUM_DEBT",
+            "AMT_CREDIT_SUM_OVERDUE",
+        ],
+    ].sort_values("DAYS_CREDIT_UPDATE", ascending=False)
 
     future_credit_update
     return (future_credit_update,)
@@ -501,28 +470,21 @@ def _(bureau):
 @app.cell
 def _(future_credit_update):
     future_credit_update["DAYS_CREDIT_UPDATE"].describe()
-    return
 
 
 @app.cell
 def _(future_credit_update):
     future_credit_update["CREDIT_ACTIVE"].value_counts(dropna=False)
-    return
 
 
 @app.cell
 def _(future_credit_update):
     future_credit_update["CREDIT_TYPE"].value_counts(dropna=False)
-    return
 
 
 @app.cell
 def _(bureau):
-    bureau_safe = (
-        bureau
-        .loc[bureau["DAYS_CREDIT_UPDATE"] <= 0]
-        .copy()
-    )
+    bureau_safe = bureau.loc[bureau["DAYS_CREDIT_UPDATE"] <= 0].copy()
 
     print("Before:", len(bureau))
     print("After:", len(bureau_safe))
@@ -535,7 +497,6 @@ def _(bureau_safe):
     assert (bureau_safe["DAYS_CREDIT_UPDATE"] > 0).sum() == 0
     assert (bureau_safe["DAYS_CREDIT"] > 0).sum() == 0
     assert (bureau_safe["DAYS_ENDDATE_FACT"] > 0).sum() == 0
-    return
 
 
 @app.cell(hide_code=True)
@@ -558,7 +519,6 @@ def _(mo):
 
     This removes approximately 0.001% of bureau records and has negligible impact on dataset coverage while eliminating an identifiable source of potential temporal leakage.
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -566,16 +526,11 @@ def _(mo):
     mo.md(r"""
     ## Money-related
     """)
-    return
 
 
 @app.cell
 def _(bureau):
-    AMOUNT_COLUMNS = [
-        col
-        for col in bureau.columns
-        if col.startswith("AMT_")
-    ]
+    AMOUNT_COLUMNS = [col for col in bureau.columns if col.startswith("AMT_")]
 
     bureau[AMOUNT_COLUMNS].describe().T
     return (AMOUNT_COLUMNS,)
@@ -583,10 +538,7 @@ def _(bureau):
 
 @app.cell
 def _(AMOUNT_COLUMNS, bureau):
-    bureau[AMOUNT_COLUMNS].isna().mean().sort_values(
-        ascending=False
-    )
-    return
+    bureau[AMOUNT_COLUMNS].isna().mean().sort_values(ascending=False)
 
 
 @app.cell(hide_code=True)
@@ -594,14 +546,12 @@ def _(mo):
     mo.md(r"""
     ## Active and closed loans per client
     """)
-    return
 
 
 @app.cell
 def _(bureau_safe):
     bureau_status_counts = (
-        bureau_safe
-        .groupby(["SK_ID_CURR", "CREDIT_ACTIVE"])
+        bureau_safe.groupby(["SK_ID_CURR", "CREDIT_ACTIVE"])
         .size()
         .unstack(fill_value=0)
     )
@@ -617,7 +567,6 @@ def _(bureau_status_counts):
     ).T
 
     status_summary
-    return
 
 
 @app.cell
@@ -626,33 +575,22 @@ def _(bureau_status_counts):
         n_clients = (bureau_status_counts[status] > 0).sum()
         share = n_clients / len(bureau_status_counts)
 
-        print(
-            f"{status}: "
-            f"{n_clients:,} clients "
-            f"({share:.2%})"
-        )
-    return
+        print(f"{status}: {n_clients:,} clients ({share:.2%})")
 
 
 @app.cell
 def _(bureau_status_counts):
     bureau_status_profile = bureau_status_counts.copy()
 
-    bureau_status_profile["TOTAL"] = (
-        bureau_status_profile.sum(axis=1)
-    )
+    bureau_status_profile["TOTAL"] = bureau_status_profile.sum(axis=1)
 
     bureau_status_profile["ACTIVE_SHARE"] = (
-        bureau_status_profile.get("Active", 0)
-        / bureau_status_profile["TOTAL"]
+        bureau_status_profile.get("Active", 0) / bureau_status_profile["TOTAL"]
     )
 
-    bureau_status_profile[
-        ["TOTAL", "Active", "Closed", "ACTIVE_SHARE"]
-    ].describe(
+    bureau_status_profile[["TOTAL", "Active", "Closed", "ACTIVE_SHARE"]].describe(
         percentiles=[0.5, 0.75, 0.9, 0.95, 0.99]
     )
-    return
 
 
 @app.cell(hide_code=True)
@@ -660,7 +598,6 @@ def _(mo):
     mo.md(r"""
     ## B1 - Bureau basic credit history
     """)
-    return
 
 
 @app.cell
@@ -672,7 +609,6 @@ def _():
         "BUREAU_SOLD_COUNT",
         "BUREAU_ACTIVE_SHARE",
     ]
-    return
 
 
 @app.cell
@@ -754,7 +690,6 @@ def _(mo):
     mo.md(r"""
     ## B2 - Bureau recency / credit activity
     """)
-    return
 
 
 @app.cell
@@ -804,7 +739,6 @@ def _():
         "BUREAU_CREDITS_LAST_365D",
         "BUREAU_CREDITS_LAST_730D",
     ]
-    return
 
 
 @app.cell
@@ -862,7 +796,6 @@ def _(mo):
     mo.md(r"""
     ## B3 - Bureau loan amount
     """)
-    return
 
 
 @app.cell
@@ -874,10 +807,9 @@ def _(bureau_safe):
             "AMT_CREDIT_SUM_LIMIT",
             "AMT_CREDIT_SUM_OVERDUE",
             "AMT_CREDIT_MAX_OVERDUE",
-            "AMT_ANNUITY"
+            "AMT_ANNUITY",
         ]
     ].describe().T
-    return
 
 
 @app.cell
@@ -889,10 +821,9 @@ def _(bureau_safe):
             "AMT_CREDIT_SUM_LIMIT",
             "AMT_CREDIT_SUM_OVERDUE",
             "AMT_CREDIT_MAX_OVERDUE",
-            "AMT_ANNUITY"
+            "AMT_ANNUITY",
         ]
     ].isna().mean().sort_values(ascending=False)
-    return
 
 
 @app.cell
@@ -903,14 +834,11 @@ def _(bureau_safe):
         "AMT_CREDIT_SUM_LIMIT",
         "AMT_CREDIT_SUM_OVERDUE",
         "AMT_CREDIT_MAX_OVERDUE",
-        "AMT_ANNUITY"
-
+        "AMT_ANNUITY",
     ]:
-        print(
-            f"\n{col_credit}")
+        print(f"\n{col_credit}")
         print("negative:", (bureau_safe[col_credit] < 0).sum())
         print("zero:", (bureau_safe[col_credit] == 0).sum())
-    return
 
 
 @app.cell
@@ -927,9 +855,7 @@ def _(bureau_safe):
             "AMT_CREDIT_SUM_LIMIT",
             "AMT_CREDIT_SUM_OVERDUE",
         ],
-    ].sort_values(
-        "AMT_CREDIT_SUM_DEBT"
-    )
+    ].sort_values("AMT_CREDIT_SUM_DEBT")
 
     negative_debt.head(10)
     return (negative_debt,)
@@ -938,42 +864,28 @@ def _(bureau_safe):
 @app.cell
 def _(negative_debt):
     negative_debt["CREDIT_ACTIVE"].value_counts(dropna=False)
-    return
 
 
 @app.cell
 def _(negative_debt):
     negative_debt["AMT_CREDIT_SUM_DEBT"].describe()
-    return
 
 
 @app.cell
 def _(bureau_safe):
     debt_limit = bureau_safe[
-        [
-            "AMT_CREDIT_SUM_DEBT",
-            "AMT_CREDIT_SUM_LIMIT",
-            "CREDIT_TYPE",
-            "AMT_CREDIT_SUM"
-        ]
-    ].dropna(
-        subset=[
-            "AMT_CREDIT_SUM_DEBT",
-            "AMT_CREDIT_SUM_LIMIT",
-            "AMT_CREDIT_SUM"
-        ]
-    )
+        ["AMT_CREDIT_SUM_DEBT", "AMT_CREDIT_SUM_LIMIT", "CREDIT_TYPE", "AMT_CREDIT_SUM"]
+    ].dropna(subset=["AMT_CREDIT_SUM_DEBT", "AMT_CREDIT_SUM_LIMIT", "AMT_CREDIT_SUM"])
 
     negative_debt_mask = debt_limit["AMT_CREDIT_SUM_DEBT"] < 0
 
     (
         debt_limit.loc[negative_debt_mask]
         .assign(
-            DEBT_PLUS_LIMIT=lambda x:
-                x["AMT_CREDIT_SUM_DEBT"]
-                + x["AMT_CREDIT_SUM_LIMIT"]
-        )
-        [["DEBT_PLUS_LIMIT", "AMT_CREDIT_SUM"]]
+            DEBT_PLUS_LIMIT=lambda x: (
+                x["AMT_CREDIT_SUM_DEBT"] + x["AMT_CREDIT_SUM_LIMIT"]
+            )
+        )[["DEBT_PLUS_LIMIT", "AMT_CREDIT_SUM"]]
         .describe()
     )
     return debt_limit, negative_debt_mask
@@ -981,11 +893,7 @@ def _(bureau_safe):
 
 @app.cell
 def _(debt_limit, negative_debt_mask):
-    debt_limit.loc[
-        negative_debt_mask,
-        "CREDIT_TYPE"
-    ].value_counts()
-    return
+    debt_limit.loc[negative_debt_mask, "CREDIT_TYPE"].value_counts()
 
 
 @app.cell
@@ -1012,9 +920,8 @@ def _():
         "BUREAU_TOTAL_CREDIT_LIMIT",
         "BUREAU_MEAN_CREDIT_SUM",
         "BUREAU_TOTAL_CREDIT_DEBT",
-        "BUREAU_TOTAL_CREDIT_OVERDUE"
+        "BUREAU_TOTAL_CREDIT_OVERDUE",
     ]
-    return
 
 
 @app.cell
@@ -1051,7 +958,6 @@ def _(mo):
     mo.md(r"""
     ## B4 - Delinquency / credit stress
     """)
-    return
 
 
 @app.cell
@@ -1062,9 +968,8 @@ def _():
         "MAX_CREDIT_DAY_OVERDUE",
         "MAX_CREDIT_OVERDUE_AMT",
         "TOTAL_ACTIVE_CREDIT_OVERDUE",
-        "OVERDUE_CREDIT_SHARE"
+        "OVERDUE_CREDIT_SHARE",
     ]
-    return
 
 
 @app.cell
@@ -1117,7 +1022,6 @@ def _(mo):
     mo.md(r"""
     # Previous applications
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -1125,28 +1029,28 @@ def _(mo):
     mo.md(r"""
     ### Structure
     """)
-    return
 
 
 @app.cell
 def _(previous_application):
     previous_application.head()
-    return
 
 
 @app.cell
 def _(previous_application):
     print(f"Shape: {previous_application.shape}")
     print(f"Unique application IDs: {previous_application['SK_ID_CURR'].nunique()}")
-    print(f"Unique previous application IDs: {previous_application['SK_ID_PREV'].nunique()}")
-    print(f"Non-unique previous application IDs: {previous_application['SK_ID_PREV'].duplicated().sum()}")
-    return
+    print(
+        f"Unique previous application IDs: {previous_application['SK_ID_PREV'].nunique()}"
+    )
+    print(
+        f"Non-unique previous application IDs: {previous_application['SK_ID_PREV'].duplicated().sum()}"
+    )
 
 
 @app.cell
 def _(previous_application):
     previous_application.info()
-    return
 
 
 @app.cell
@@ -1164,13 +1068,11 @@ def _(previous_application):
 @app.cell
 def _(numeric_columns):
     numeric_columns
-    return
 
 
 @app.cell
 def _(cat_columns):
     cat_columns
-    return
 
 
 @app.cell(hide_code=True)
@@ -1178,20 +1080,17 @@ def _(mo):
     mo.md(r"""
     ### Previous application per SK_ID_CURR
     """)
-    return
 
 
 @app.cell
 def _(previous_application):
     previous_application_per_id = (
-        previous_application
-        .groupby("SK_ID_CURR")
+        previous_application.groupby("SK_ID_CURR")
         .size()
         .rename("PREVIOUS_APPLICATION_COUNT")
         .to_frame()
     )
     previous_application_per_id.describe()
-    return
 
 
 @app.cell(hide_code=True)
@@ -1199,20 +1098,21 @@ def _(mo):
     mo.md(r"""
     ### Missingness
     """)
-    return
 
 
 @app.cell
 def _(previous_application):
-    missing_applications = (previous_application.isna().sum() / previous_application.shape[0]) * 100
+    missing_applications = (
+        previous_application.isna().sum() / previous_application.shape[0]
+    ) * 100
     missing_applications.sort_values(ascending=False)
-    return
 
 
 @app.cell
 def _(previous_application):
-    previous_application[["RATE_INTEREST_PRIMARY", "RATE_INTEREST_PRIVILEGED"]].describe()
-    return
+    previous_application[
+        ["RATE_INTEREST_PRIMARY", "RATE_INTEREST_PRIVILEGED"]
+    ].describe()
 
 
 @app.cell(hide_code=True)
@@ -1220,7 +1120,6 @@ def _(mo):
     mo.md(r"""
     ### Time-related
     """)
-    return
 
 
 @app.cell
@@ -1240,7 +1139,7 @@ def _(numeric_columns, previous_application):
                 (previous_application[day_col] < 0).sum(),
                 "missing:",
                 previous_application[day_col].isna().sum(),
-                end="\n\n"
+                end="\n\n",
             )
     return (day_cols,)
 
@@ -1248,7 +1147,6 @@ def _(numeric_columns, previous_application):
 @app.cell
 def _(day_cols, previous_application):
     previous_application[day_cols].describe()
-    return
 
 
 @app.cell(hide_code=True)
@@ -1256,7 +1154,6 @@ def _(mo):
     mo.md(r"""
     ### P1 - Application history
     """)
-    return
 
 
 @app.cell
@@ -1269,9 +1166,8 @@ def _():
         "PREV_APP_UNUSED_COUNT",
         "PREV_APP_APPROVAL_RATE",
         "PREV_APP_REFUSAL_RATE",
-        "PREV_APP_DAYS_SINCE_LAST"
+        "PREV_APP_DAYS_SINCE_LAST",
     ]
-    return
 
 
 @app.cell
@@ -1326,7 +1222,6 @@ def _(mo):
     mo.md(r"""
     ## P2 - Financial history
     """)
-    return
 
 
 @app.cell
@@ -1337,7 +1232,7 @@ def _():
         "AMT_GOODS_PRICE",
         "AMT_ANNUITY",
         "AMT_DOWN_PAYMENT",
-        "CNT_PAYMENT"
+        "CNT_PAYMENT",
     ]
     return (financial_history_features,)
 
@@ -1345,21 +1240,17 @@ def _():
 @app.cell
 def _(financial_history_features, previous_application):
     previous_application[financial_history_features].describe()
-    return
 
 
 @app.cell
 def _(pd, previous_application):
     previous_application["CREDIT_APPLICATION_DIFF"] = (
-        previous_application["AMT_CREDIT"]
-        - previous_application["AMT_APPLICATION"]
+        previous_application["AMT_CREDIT"] - previous_application["AMT_APPLICATION"]
     )
 
-    previous_application["CREDIT_APPLICATION_RATIO"] = (
-        previous_application["AMT_CREDIT"]
-        / previous_application["AMT_APPLICATION"].replace(0, pd.NA)
-    )
-    return
+    previous_application["CREDIT_APPLICATION_RATIO"] = previous_application[
+        "AMT_CREDIT"
+    ] / previous_application["AMT_APPLICATION"].replace(0, pd.NA)
 
 
 @app.cell
@@ -1427,13 +1318,11 @@ def _(mo):
     mo.md(r"""
     ## P3 - Categorical
     """)
-    return
 
 
 @app.cell
 def _(cat_columns, previous_application):
     previous_application[cat_columns].describe()
-    return
 
 
 @app.cell
@@ -1529,7 +1418,6 @@ def _(mo):
     mo.md(r"""
     ## P4 - Temporal history
     """)
-    return
 
 
 @app.cell
@@ -1542,27 +1430,22 @@ def _(np, previous_application):
         "DAYS_TERMINATION",
     ]
 
-    previous_application[TEMPORAL_SENTINEL_COLUMNS] = (
-        previous_application[TEMPORAL_SENTINEL_COLUMNS]
-        .replace(365243, np.nan)
-    )
+    previous_application[TEMPORAL_SENTINEL_COLUMNS] = previous_application[
+        TEMPORAL_SENTINEL_COLUMNS
+    ].replace(365243, np.nan)
     return (TEMPORAL_SENTINEL_COLUMNS,)
 
 
 @app.cell
 def _(TEMPORAL_SENTINEL_COLUMNS, previous_application):
-    previous_application[
-        ["DAYS_DECISION"] + TEMPORAL_SENTINEL_COLUMNS
-    ].agg(["count", "min", "max"])
-    return
+    previous_application[["DAYS_DECISION"] + TEMPORAL_SENTINEL_COLUMNS].agg(
+        ["count", "min", "max"]
+    )
 
 
 @app.cell
 def _(TEMPORAL_SENTINEL_COLUMNS, previous_application):
-    (previous_application[
-        ["DAYS_DECISION"] + TEMPORAL_SENTINEL_COLUMNS
-    ] > 0).sum()
-    return
+    (previous_application[["DAYS_DECISION"] + TEMPORAL_SENTINEL_COLUMNS] > 0).sum()
 
 
 @app.cell
@@ -1667,7 +1550,6 @@ def _(mo):
     mo.md(r"""
     # Credit card balance
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -1675,39 +1557,25 @@ def _(mo):
     mo.md(r"""
     ## Grain
     """)
-    return
 
 
 @app.cell
 def _(credit_card_balance):
     print(credit_card_balance.shape)
 
-    print(
-        credit_card_balance[
-            ["SK_ID_CURR", "SK_ID_PREV", "MONTHS_BALANCE"]
-        ].nunique()
-    )
+    print(credit_card_balance[["SK_ID_CURR", "SK_ID_PREV", "MONTHS_BALANCE"]].nunique())
 
-    print(
-        credit_card_balance.groupby("SK_ID_CURR")["SK_ID_PREV"]
-        .nunique()
-        .describe()
-    )
-    return
+    print(credit_card_balance.groupby("SK_ID_CURR")["SK_ID_PREV"].nunique().describe())
 
 
 @app.cell
 def _(credit_card_balance):
-    credit_card_balance.groupby('SK_ID_PREV')['MONTHS_BALANCE'].nunique().describe()
-    return
+    credit_card_balance.groupby("SK_ID_PREV")["MONTHS_BALANCE"].nunique().describe()
 
 
 @app.cell
 def _(credit_card_balance):
-    credit_card_balance[
-        ["SK_ID_CURR", "SK_ID_PREV", "MONTHS_BALANCE"]
-    ].describe()
-    return
+    credit_card_balance[["SK_ID_CURR", "SK_ID_PREV", "MONTHS_BALANCE"]].describe()
 
 
 @app.cell(hide_code=True)
@@ -1715,25 +1583,21 @@ def _(mo):
     mo.md(r"""
     ## Missingness
     """)
-    return
 
 
 @app.cell
 def _(credit_card_balance):
     credit_card_balance.isna().mean().sort_values(ascending=False)
-    return
 
 
 @app.cell
 def _(credit_card_balance):
     credit_card_balance
-    return
 
 
 @app.cell
 def _(credit_card_balance):
     credit_card_balance.describe()
-    return
 
 
 @app.cell(hide_code=True)
@@ -1741,7 +1605,6 @@ def _(mo):
     mo.md(r"""
     ## CC1 - Activity
     """)
-    return
 
 
 @app.cell
@@ -1807,22 +1670,18 @@ def _(mo):
     mo.md(r"""
     ## CC2 - balance and utilization
     """)
-    return
 
 
 @app.cell
 def _(credit_card_balance):
     (credit_card_balance["AMT_CREDIT_LIMIT_ACTUAL"] == 0).mean()
-    return
 
 
 @app.cell
 def _(credit_card_balance, np):
-    credit_card_balance["CC_UTILIZATION"] = (
-        credit_card_balance["AMT_BALANCE"]
-        / credit_card_balance["AMT_CREDIT_LIMIT_ACTUAL"].replace(0, np.nan)
-    )
-    return
+    credit_card_balance["CC_UTILIZATION"] = credit_card_balance[
+        "AMT_BALANCE"
+    ] / credit_card_balance["AMT_CREDIT_LIMIT_ACTUAL"].replace(0, np.nan)
 
 
 @app.cell
@@ -1830,18 +1689,15 @@ def _(credit_card_balance):
     credit_card_balance["CC_UTILIZATION"].describe(
         percentiles=[0.01, 0.05, 0.25, 0.5, 0.75, 0.95, 0.99]
     )
-    return
 
 
 @app.cell
 def _(credit_card_balance):
     cc_latest = (
-        credit_card_balance
-        .sort_values(["SK_ID_PREV", "MONTHS_BALANCE"])
+        credit_card_balance.sort_values(["SK_ID_PREV", "MONTHS_BALANCE"])
         .groupby("SK_ID_PREV")
         .tail(1)
     )
-    return
 
 
 @app.cell
@@ -1909,21 +1765,20 @@ def _(mo):
     mo.md(r"""
     ## CC3 - drawings and payments
     """)
-    return
 
 
 @app.cell
 def _(credit_card_balance):
     credit_card_balance
-    return
 
 
 @app.cell
 def _(credit_card_balance):
     DRAWINGS_PAYMENT_COLUMNS = [
-        column for column in credit_card_balance.columns
-        if (column.startswith("AMT_DRAWINGS_") or column.startswith("CNT_DRAWINGS_")) or
-        (column.startswith("AMT_PAYMENT_") or column.startswith("CNT_PAYMENT_"))
+        column
+        for column in credit_card_balance.columns
+        if (column.startswith("AMT_DRAWINGS_") or column.startswith("CNT_DRAWINGS_"))
+        or (column.startswith("AMT_PAYMENT_") or column.startswith("CNT_PAYMENT_"))
     ]
     return (DRAWINGS_PAYMENT_COLUMNS,)
 
@@ -1931,7 +1786,6 @@ def _(credit_card_balance):
 @app.cell
 def _(DRAWINGS_PAYMENT_COLUMNS, credit_card_balance):
     credit_card_balance[DRAWINGS_PAYMENT_COLUMNS].describe()
-    return
 
 
 @app.cell
@@ -1941,11 +1795,9 @@ def _(credit_card_balance, np):
         - credit_card_balance["AMT_PAYMENT_TOTAL_CURRENT"]
     )
 
-    credit_card_balance["CC_ATM_DRAWING_SHARE"] = (
-        credit_card_balance["AMT_DRAWINGS_ATM_CURRENT"]
-        / credit_card_balance["AMT_DRAWINGS_CURRENT"].replace(0, np.nan)
-    )
-    return
+    credit_card_balance["CC_ATM_DRAWING_SHARE"] = credit_card_balance[
+        "AMT_DRAWINGS_ATM_CURRENT"
+    ] / credit_card_balance["AMT_DRAWINGS_CURRENT"].replace(0, np.nan)
 
 
 @app.cell
@@ -2020,14 +1872,13 @@ def _(mo):
     mo.md(r"""
     ## CC4 - delinquency and stress
     """)
-    return
 
 
 @app.cell
 def _(credit_card_balance):
-    credit_card_balance["CC_HAS_DPD"] = (
-        credit_card_balance["SK_DPD"] > 0
-    ).astype("int8")
+    credit_card_balance["CC_HAS_DPD"] = (credit_card_balance["SK_DPD"] > 0).astype(
+        "int8"
+    )
 
     credit_card_balance["CC_HAS_DPD_DEF"] = (
         credit_card_balance["SK_DPD_DEF"] > 0
@@ -2040,7 +1891,6 @@ def _(credit_card_balance):
     credit_card_balance["CC_DPD_90_PLUS"] = (
         credit_card_balance["SK_DPD"] >= 90
     ).astype("int8")
-    return
 
 
 @app.cell
@@ -2122,7 +1972,6 @@ def _():
 @app.cell
 def _(pd):
     cc4_df = pd.read_parquet("data/processed/modeling_cc4.parquet")
-    return
 
 
 @app.cell(hide_code=True)
@@ -2130,40 +1979,35 @@ def _(mo):
     mo.md(r"""
     # Installments payments
     """)
-    return
 
 
 @app.cell
 def _(installments_payments):
     installments_payments.head()
-    return
 
 
 @app.cell
 def _(installments_payments):
     installments_payments.shape
-    return
 
 
 @app.cell
 def _(installments_payments):
     installments_payments[["SK_ID_CURR", "SK_ID_PREV"]].nunique()
-    return
 
 
 @app.cell
 def _(installments_payments):
     installments_payments[
-            [
-                "NUM_INSTALMENT_VERSION",
-                "NUM_INSTALMENT_NUMBER",
-                "DAYS_INSTALMENT",
-                "DAYS_ENTRY_PAYMENT",
-                "AMT_INSTALMENT",
-                "AMT_PAYMENT",
-            ]
-        ].describe()
-    return
+        [
+            "NUM_INSTALMENT_VERSION",
+            "NUM_INSTALMENT_NUMBER",
+            "DAYS_INSTALMENT",
+            "DAYS_ENTRY_PAYMENT",
+            "AMT_INSTALMENT",
+            "AMT_PAYMENT",
+        ]
+    ].describe()
 
 
 @app.cell(hide_code=True)
@@ -2171,13 +2015,11 @@ def _(mo):
     mo.md(r"""
     ## Missingness
     """)
-    return
 
 
 @app.cell
 def _(installments_payments):
     installments_payments.isna().mean().sort_values(ascending=False)
-    return
 
 
 @app.cell(hide_code=True)
@@ -2185,7 +2027,6 @@ def _(mo):
     mo.md(r"""
     ## Grain
     """)
-    return
 
 
 @app.cell
@@ -2193,7 +2034,6 @@ def _(installments_payments):
     installments_payments.groupby(
         ["SK_ID_PREV", "NUM_INSTALMENT_NUMBER"]
     ).size().describe()
-    return
 
 
 @app.cell(hide_code=True)
@@ -2201,17 +2041,11 @@ def _(mo):
     mo.md(r"""
     ## Time-related
     """)
-    return
 
 
 @app.cell
 def _(installments_payments):
-    print(
-        (installments_payments[
-            ["DAYS_INSTALMENT", "DAYS_ENTRY_PAYMENT"]
-        ] > 0).sum()
-    )
-    return
+    print((installments_payments[["DAYS_INSTALMENT", "DAYS_ENTRY_PAYMENT"]] > 0).sum())
 
 
 @app.cell(hide_code=True)
@@ -2219,7 +2053,6 @@ def _(mo):
     mo.md(r"""
     ## IP1 - structure and history
     """)
-    return
 
 
 @app.cell
@@ -2289,7 +2122,6 @@ def _(mo):
     mo.md(r"""
     ## IP2 - repayment discipline
     """)
-    return
 
 
 @app.cell
@@ -2453,7 +2285,6 @@ def _(mo):
     mo.md(r"""
     ## IP3 - Recent repayment discipline
     """)
-    return
 
 
 @app.cell
@@ -2571,7 +2402,6 @@ def _(mo):
     ### Objective / Hypothesis
     Test whether a two-stage aggregation (`installment -> previous contract -> applicant`) capturing contract-level repayment heterogeneity (worst-contract lateness, severe delinquency share, underpayment, latest contract behavior, and recency-weighted patterns) exposes risk signals averaged away by client-level aggregations.
     """)
-    return
 
 
 @app.cell
@@ -2590,53 +2420,33 @@ def _(np):
         x = installments[cols].copy()
 
         # Only installments whose scheduled due date is before the current application.
-        x = x.loc[
-            x["DAYS_INSTALMENT"] <= 0
-        ].copy()
+        x = x.loc[x["DAYS_INSTALMENT"] <= 0].copy()
 
         # Actual payments after the current application are unavailable at cutoff.
-        known_payment = (
-            x["DAYS_ENTRY_PAYMENT"].notna()
-            & (x["DAYS_ENTRY_PAYMENT"] <= 0)
-        )
+        known_payment = x["DAYS_ENTRY_PAYMENT"].notna() & (x["DAYS_ENTRY_PAYMENT"] <= 0)
 
         x["IPX_DAYS_LATE"] = np.where(
             known_payment,
-            (
-                x["DAYS_ENTRY_PAYMENT"]
-                - x["DAYS_INSTALMENT"]
-            ).clip(lower=0),
+            (x["DAYS_ENTRY_PAYMENT"] - x["DAYS_INSTALMENT"]).clip(lower=0),
             np.nan,
         )
 
         x["IPX_PAYMENT_RATIO"] = np.where(
             known_payment,
-            x["AMT_PAYMENT"]
-            / x["AMT_INSTALMENT"].replace(0, np.nan),
+            x["AMT_PAYMENT"] / x["AMT_INSTALMENT"].replace(0, np.nan),
             np.nan,
         )
 
         # Limit extreme partial/overpayment values.
-        x["IPX_PAYMENT_RATIO"] = (
-            x["IPX_PAYMENT_RATIO"]
-            .clip(0, 3)
-        )
+        x["IPX_PAYMENT_RATIO"] = x["IPX_PAYMENT_RATIO"].clip(0, 3)
 
-        x["IPX_LATE"] = (
-            x["IPX_DAYS_LATE"] > 0
-        ).astype(float)
+        x["IPX_LATE"] = (x["IPX_DAYS_LATE"] > 0).astype(float)
 
-        x["IPX_LATE_7D"] = (
-            x["IPX_DAYS_LATE"] > 7
-        ).astype(float)
+        x["IPX_LATE_7D"] = (x["IPX_DAYS_LATE"] > 7).astype(float)
 
-        x["IPX_LATE_30D"] = (
-            x["IPX_DAYS_LATE"] > 30
-        ).astype(float)
+        x["IPX_LATE_30D"] = (x["IPX_DAYS_LATE"] > 30).astype(float)
 
-        x["IPX_UNDERPAID"] = (
-            x["IPX_PAYMENT_RATIO"] < 0.95
-        ).astype(float)
+        x["IPX_UNDERPAID"] = (x["IPX_PAYMENT_RATIO"] < 0.95).astype(float)
 
         # Make unavailable actual-payment records missing rather than "good".
         for col in [
@@ -2661,7 +2471,6 @@ def _(np):
                     "DAYS_INSTALMENT",
                     "max",
                 ),
-
                 IPX_CONTRACT_LATE_SHARE=(
                     "IPX_LATE",
                     "mean",
@@ -2674,7 +2483,6 @@ def _(np):
                     "IPX_LATE_30D",
                     "mean",
                 ),
-
                 IPX_CONTRACT_MEAN_DAYS_LATE=(
                     "IPX_DAYS_LATE",
                     "mean",
@@ -2683,7 +2491,6 @@ def _(np):
                     "IPX_DAYS_LATE",
                     "max",
                 ),
-
                 IPX_CONTRACT_MEAN_PAYMENT_RATIO=(
                     "IPX_PAYMENT_RATIO",
                     "mean",
@@ -2707,86 +2514,71 @@ def _(np):
         ).astype(float)
 
         contract["IPX_RECENCY_WEIGHT"] = np.exp(
-            contract[
-                "IPX_CONTRACT_LAST_DUE_DAY"
-            ].clip(lower=-3650)
-            / 365.0
+            contract["IPX_CONTRACT_LAST_DUE_DAY"].clip(lower=-3650) / 365.0
         )
 
-        client = (
-            contract.groupby(
-                "SK_ID_CURR",
-                observed=True,
-            )
-            .agg(
-                IPX_N_CONTRACTS=(
-                    "SK_ID_PREV",
-                    "nunique",
-                ),
-
-                IPX_MEAN_CONTRACT_LATE_SHARE=(
-                    "IPX_CONTRACT_LATE_SHARE",
-                    "mean",
-                ),
-                IPX_MAX_CONTRACT_LATE_SHARE=(
-                    "IPX_CONTRACT_LATE_SHARE",
-                    "max",
-                ),
-                IPX_STD_CONTRACT_LATE_SHARE=(
-                    "IPX_CONTRACT_LATE_SHARE",
-                    "std",
-                ),
-
-                IPX_MEAN_CONTRACT_LATE30_SHARE=(
-                    "IPX_CONTRACT_LATE_30D_SHARE",
-                    "mean",
-                ),
-                IPX_MAX_CONTRACT_LATE30_SHARE=(
-                    "IPX_CONTRACT_LATE_30D_SHARE",
-                    "max",
-                ),
-
-                IPX_MEAN_CONTRACT_MAX_DAYS_LATE=(
-                    "IPX_CONTRACT_MAX_DAYS_LATE",
-                    "mean",
-                ),
-                IPX_WORST_CONTRACT_DAYS_LATE=(
-                    "IPX_CONTRACT_MAX_DAYS_LATE",
-                    "max",
-                ),
-
-                IPX_MEAN_CONTRACT_PAYMENT_RATIO=(
-                    "IPX_CONTRACT_MEAN_PAYMENT_RATIO",
-                    "mean",
-                ),
-                IPX_MIN_CONTRACT_PAYMENT_RATIO=(
-                    "IPX_CONTRACT_MIN_PAYMENT_RATIO",
-                    "min",
-                ),
-
-                IPX_MEAN_CONTRACT_UNDERPAID_SHARE=(
-                    "IPX_CONTRACT_UNDERPAID_SHARE",
-                    "mean",
-                ),
-                IPX_MAX_CONTRACT_UNDERPAID_SHARE=(
-                    "IPX_CONTRACT_UNDERPAID_SHARE",
-                    "max",
-                ),
-
-                IPX_BAD_CONTRACT_SHARE=(
-                    "IPX_BAD_CONTRACT",
-                    "mean",
-                ),
-            )
+        client = contract.groupby(
+            "SK_ID_CURR",
+            observed=True,
+        ).agg(
+            IPX_N_CONTRACTS=(
+                "SK_ID_PREV",
+                "nunique",
+            ),
+            IPX_MEAN_CONTRACT_LATE_SHARE=(
+                "IPX_CONTRACT_LATE_SHARE",
+                "mean",
+            ),
+            IPX_MAX_CONTRACT_LATE_SHARE=(
+                "IPX_CONTRACT_LATE_SHARE",
+                "max",
+            ),
+            IPX_STD_CONTRACT_LATE_SHARE=(
+                "IPX_CONTRACT_LATE_SHARE",
+                "std",
+            ),
+            IPX_MEAN_CONTRACT_LATE30_SHARE=(
+                "IPX_CONTRACT_LATE_30D_SHARE",
+                "mean",
+            ),
+            IPX_MAX_CONTRACT_LATE30_SHARE=(
+                "IPX_CONTRACT_LATE_30D_SHARE",
+                "max",
+            ),
+            IPX_MEAN_CONTRACT_MAX_DAYS_LATE=(
+                "IPX_CONTRACT_MAX_DAYS_LATE",
+                "mean",
+            ),
+            IPX_WORST_CONTRACT_DAYS_LATE=(
+                "IPX_CONTRACT_MAX_DAYS_LATE",
+                "max",
+            ),
+            IPX_MEAN_CONTRACT_PAYMENT_RATIO=(
+                "IPX_CONTRACT_MEAN_PAYMENT_RATIO",
+                "mean",
+            ),
+            IPX_MIN_CONTRACT_PAYMENT_RATIO=(
+                "IPX_CONTRACT_MIN_PAYMENT_RATIO",
+                "min",
+            ),
+            IPX_MEAN_CONTRACT_UNDERPAID_SHARE=(
+                "IPX_CONTRACT_UNDERPAID_SHARE",
+                "mean",
+            ),
+            IPX_MAX_CONTRACT_UNDERPAID_SHARE=(
+                "IPX_CONTRACT_UNDERPAID_SHARE",
+                "max",
+            ),
+            IPX_BAD_CONTRACT_SHARE=(
+                "IPX_BAD_CONTRACT",
+                "mean",
+            ),
         )
 
         # Latest previous contract.
-        latest_idx = (
-            contract.groupby("SK_ID_CURR")[
-                "IPX_CONTRACT_LAST_DUE_DAY"
-            ]
-            .idxmax()
-        )
+        latest_idx = contract.groupby("SK_ID_CURR")[
+            "IPX_CONTRACT_LAST_DUE_DAY"
+        ].idxmax()
 
         latest = (
             contract.loc[
@@ -2849,9 +2641,7 @@ def _(np):
                 .sum()
             )
 
-            client[
-                f"IPX_WEIGHTED_{feature}"
-            ] = numerator / denominator
+            client[f"IPX_WEIGHTED_{feature}"] = numerator / denominator
 
         return client.reset_index()
 
@@ -2860,9 +2650,7 @@ def _(np):
 
 @app.cell
 def _(build_installments_contract_features, installments_payments):
-    ipx_features = build_installments_contract_features(
-        installments_payments
-    )
+    ipx_features = build_installments_contract_features(installments_payments)
 
     print(ipx_features.shape)
     return (ipx_features,)
@@ -2870,11 +2658,7 @@ def _(build_installments_contract_features, installments_payments):
 
 @app.cell
 def _(ipx_features):
-    ipx_cols = [
-        c for c in ipx_features.columns
-        if c.startswith("IPX_")
-    ]
-    return
+    ipx_cols = [c for c in ipx_features.columns if c.startswith("IPX_")]
 
 
 @app.cell(hide_code=True)
@@ -2882,35 +2666,29 @@ def _(mo):
     mo.md(r"""
     # POS / cash balance
     """)
-    return
 
 
 @app.cell
 def _(pos_cash_balance):
     pos_cash_balance.head()
-    return
+
+
+@app.cell
+def _(pos_cash_balance):
+    pos_cash_balance[["SK_ID_CURR", "SK_ID_PREV", "MONTHS_BALANCE"]].nunique()
 
 
 @app.cell
 def _(pos_cash_balance):
     pos_cash_balance[
-            ["SK_ID_CURR", "SK_ID_PREV", "MONTHS_BALANCE"]
-        ].nunique()
-    return
-
-
-@app.cell
-def _(pos_cash_balance):
-    pos_cash_balance[
-            [
-                "MONTHS_BALANCE",
-                "CNT_INSTALMENT",
-                "CNT_INSTALMENT_FUTURE",
-                "SK_DPD",
-                "SK_DPD_DEF",
-            ]
-        ].describe()
-    return
+        [
+            "MONTHS_BALANCE",
+            "CNT_INSTALMENT",
+            "CNT_INSTALMENT_FUTURE",
+            "SK_DPD",
+            "SK_DPD_DEF",
+        ]
+    ].describe()
 
 
 @app.cell(hide_code=True)
@@ -2918,30 +2696,23 @@ def _(mo):
     mo.md(r"""
     ## Missingness
     """)
-    return
 
 
 @app.cell
 def _(pos_cash_balance):
     pos_cash_balance.isna().mean().sort_values(ascending=False)
-    return
 
 
 @app.cell
 def _(pos_cash_balance):
-    pos_cash_balance.groupby(
-        ["SK_ID_PREV", "MONTHS_BALANCE"]
-    ).size().describe()
-    return
+    pos_cash_balance.groupby(["SK_ID_PREV", "MONTHS_BALANCE"]).size().describe()
 
 
 @app.cell
 def _(pos_cash_balance):
     (
-        pos_cash_balance["CNT_INSTALMENT_FUTURE"]
-        > pos_cash_balance["CNT_INSTALMENT"]
+        pos_cash_balance["CNT_INSTALMENT_FUTURE"] > pos_cash_balance["CNT_INSTALMENT"]
     ).sum()
-    return
 
 
 @app.cell(hide_code=True)
@@ -2949,19 +2720,13 @@ def _(mo):
     mo.md(r"""
     ## POS1 - Contract history and repayment progress
     """)
-    return
 
 
 @app.cell
 def _(pos_cash_balance):
     pos_cash_balance["POS_COMPLETION_RATIO"] = (
-        (
-            pos_cash_balance["CNT_INSTALMENT"]
-            - pos_cash_balance["CNT_INSTALMENT_FUTURE"]
-        )
-        / pos_cash_balance["CNT_INSTALMENT"]
-    )
-    return
+        pos_cash_balance["CNT_INSTALMENT"] - pos_cash_balance["CNT_INSTALMENT_FUTURE"]
+    ) / pos_cash_balance["CNT_INSTALMENT"]
 
 
 @app.cell
@@ -2971,7 +2736,6 @@ def _(pos_cash_balance):
         .agg(
             POS_CONTRACT_COUNT=("SK_ID_PREV", "nunique"),
             POS_MONTHS_OBSERVED=("MONTHS_BALANCE", "size"),
-
             POS_HISTORY_AGE_MONTHS=(
                 "MONTHS_BALANCE",
                 lambda x: -x.min(),
@@ -2980,7 +2744,6 @@ def _(pos_cash_balance):
                 "MONTHS_BALANCE",
                 lambda x: -x.max(),
             ),
-
             POS_MEAN_INSTALMENT_COUNT=(
                 "CNT_INSTALMENT",
                 "mean",
@@ -2989,12 +2752,10 @@ def _(pos_cash_balance):
                 "CNT_INSTALMENT",
                 "max",
             ),
-
             POS_MEAN_INSTALMENTS_FUTURE=(
                 "CNT_INSTALMENT_FUTURE",
                 "mean",
             ),
-
             POS_MEAN_COMPLETION_RATIO=(
                 "POS_COMPLETION_RATIO",
                 "mean",
@@ -3008,8 +2769,7 @@ def _(pos_cash_balance):
 @app.cell
 def _(pos_cash_balance):
     pos_latest = (
-        pos_cash_balance
-        .sort_values(["SK_ID_PREV", "MONTHS_BALANCE"])
+        pos_cash_balance.sort_values(["SK_ID_PREV", "MONTHS_BALANCE"])
         .groupby("SK_ID_PREV")
         .tail(1)
     )
@@ -3063,7 +2823,6 @@ def _(ip3_df, pos1):
 @app.cell
 def _(modeling_pos1):
     modeling_pos1.to_parquet("data/processed/modeling_pos1.parquet", index=False)
-    return
 
 
 @app.cell(hide_code=True)
@@ -3071,23 +2830,19 @@ def _(mo):
     mo.md(r"""
     ## POS2 - Delinquency history
     """)
-    return
 
 
 @app.cell
 def _(pos_cash_balance):
-    pos_cash_balance["POS_HAS_DPD"] = (
-        pos_cash_balance["SK_DPD"] > 0
-    ).astype("int8")
+    pos_cash_balance["POS_HAS_DPD"] = (pos_cash_balance["SK_DPD"] > 0).astype("int8")
 
-    pos_cash_balance["POS_HAS_DPD_DEF"] = (
-        pos_cash_balance["SK_DPD_DEF"] > 0
-    ).astype("int8")
+    pos_cash_balance["POS_HAS_DPD_DEF"] = (pos_cash_balance["SK_DPD_DEF"] > 0).astype(
+        "int8"
+    )
 
-    pos_cash_balance["POS_DPD_30_PLUS"] = (
-        pos_cash_balance["SK_DPD"] >= 30
-    ).astype("int8")
-    return
+    pos_cash_balance["POS_DPD_30_PLUS"] = (pos_cash_balance["SK_DPD"] >= 30).astype(
+        "int8"
+    )
 
 
 @app.cell
@@ -3111,7 +2866,6 @@ def _(pos_cash_balance):
                 "POS_DPD_30_PLUS",
                 "mean",
             ),
-
             POS_MAX_DPD_DEF=(
                 "SK_DPD_DEF",
                 "max",
@@ -3128,9 +2882,7 @@ def _(pos_cash_balance):
 
 @app.cell
 def _(pos_cash_balance):
-    pos_recent_6m = pos_cash_balance[
-        pos_cash_balance["MONTHS_BALANCE"] >= -6
-    ]
+    pos_recent_6m = pos_cash_balance[pos_cash_balance["MONTHS_BALANCE"] >= -6]
 
     pos_recent = (
         pos_recent_6m.groupby("SK_ID_CURR")
@@ -3170,18 +2922,14 @@ def _(pos_latest):
 
 @app.cell
 def _(pos_delinquency, pos_latest_delinquency, pos_recent):
-    pos2_history = (
-        pos_delinquency
-        .merge(
-            pos_recent,
-            on="SK_ID_CURR",
-            how="left",
-        )
-        .merge(
-            pos_latest_delinquency,
-            on="SK_ID_CURR",
-            how="left",
-        )
+    pos2_history = pos_delinquency.merge(
+        pos_recent,
+        on="SK_ID_CURR",
+        how="left",
+    ).merge(
+        pos_latest_delinquency,
+        on="SK_ID_CURR",
+        how="left",
     )
     return (pos2_history,)
 
@@ -3200,7 +2948,6 @@ def _(ip3_df, pos2_history):
 @app.cell
 def _(modeling_pos2):
     modeling_pos2.to_parquet("data/processed/modeling_pos2.parquet", index=False)
-    return
 
 
 @app.cell(hide_code=True)
@@ -3211,7 +2958,6 @@ def _(mo):
     ### Objective / Hypothesis
     Construct trajectory-aware POS dynamic features separating recent 6-month behavior from full contract history, capturing remaining installment ratios, latest DPD states, and delinquency worsening.
     """)
-    return
 
 
 @app.cell
@@ -3231,24 +2977,17 @@ def _(np):
 
         assert (x["MONTHS_BALANCE"] <= 0).all()
 
-        x["POSX_REMAINING_RATIO"] = (
-            x["CNT_INSTALMENT_FUTURE"]
-            / x["CNT_INSTALMENT"].replace(0, np.nan)
-        )
+        x["POSX_REMAINING_RATIO"] = x["CNT_INSTALMENT_FUTURE"] / x[
+            "CNT_INSTALMENT"
+        ].replace(0, np.nan)
 
-        x["POSX_DPD_FLAG"] = (
-            x["SK_DPD"] > 0
-        ).astype(float)
+        x["POSX_DPD_FLAG"] = (x["SK_DPD"] > 0).astype(float)
 
-        x["POSX_DPD30_FLAG"] = (
-            x["SK_DPD"] > 30
-        ).astype(float)
+        x["POSX_DPD30_FLAG"] = (x["SK_DPD"] > 30).astype(float)
 
         recent6 = (
             x.loc[x["MONTHS_BALANCE"] >= -6]
-            .groupby(
-                ["SK_ID_CURR", "SK_ID_PREV"]
-            )
+            .groupby(["SK_ID_CURR", "SK_ID_PREV"])
             .agg(
                 POSX_RECENT6_DPD_MEAN=("SK_DPD", "mean"),
                 POSX_RECENT6_DPD_MAX=("SK_DPD", "max"),
@@ -3258,9 +2997,7 @@ def _(np):
         )
 
         contract = (
-            x.groupby(
-                ["SK_ID_CURR", "SK_ID_PREV"]
-            )
+            x.groupby(["SK_ID_CURR", "SK_ID_PREV"])
             .agg(
                 POSX_MONTHS_OBSERVED=("MONTHS_BALANCE", "nunique"),
                 POSX_MEAN_DPD=("SK_DPD", "mean"),
@@ -3272,61 +3009,39 @@ def _(np):
             .reset_index()
         )
 
-        ordered = x.sort_values(
-            ["SK_ID_CURR", "SK_ID_PREV", "MONTHS_BALANCE"]
-        )
+        ordered = x.sort_values(["SK_ID_CURR", "SK_ID_PREV", "MONTHS_BALANCE"])
 
-        oldest = (
-            ordered
-            .drop_duplicates(
-                ["SK_ID_CURR", "SK_ID_PREV"],
-                keep="first",
-            )
+        oldest = ordered.drop_duplicates(
+            ["SK_ID_CURR", "SK_ID_PREV"],
+            keep="first",
+        )[
             [
-                [
-                    "SK_ID_CURR",
-                    "SK_ID_PREV",
-                    "POSX_REMAINING_RATIO",
-                ]
+                "SK_ID_CURR",
+                "SK_ID_PREV",
+                "POSX_REMAINING_RATIO",
             ]
-            .rename(
-                columns={
-                    "POSX_REMAINING_RATIO":
-                        "POSX_OLDEST_REMAINING_RATIO"
-                }
-            )
-        )
+        ].rename(columns={"POSX_REMAINING_RATIO": "POSX_OLDEST_REMAINING_RATIO"})
 
-        latest = (
-            ordered
-            .drop_duplicates(
-                ["SK_ID_CURR", "SK_ID_PREV"],
-                keep="last",
-            )
+        latest = ordered.drop_duplicates(
+            ["SK_ID_CURR", "SK_ID_PREV"],
+            keep="last",
+        )[
             [
-                [
-                    "SK_ID_CURR",
-                    "SK_ID_PREV",
-                    "SK_DPD",
-                    "SK_DPD_DEF",
-                    "POSX_REMAINING_RATIO",
-                ]
+                "SK_ID_CURR",
+                "SK_ID_PREV",
+                "SK_DPD",
+                "SK_DPD_DEF",
+                "POSX_REMAINING_RATIO",
             ]
-            .rename(
-                columns={
-                    "SK_DPD": "POSX_LATEST_DPD",
-                    "SK_DPD_DEF": "POSX_LATEST_DPD_DEF",
-                    "POSX_REMAINING_RATIO":
-                        "POSX_LATEST_REMAINING_RATIO",
-                }
-            )
+        ].rename(
+            columns={
+                "SK_DPD": "POSX_LATEST_DPD",
+                "SK_DPD_DEF": "POSX_LATEST_DPD_DEF",
+                "POSX_REMAINING_RATIO": "POSX_LATEST_REMAINING_RATIO",
+            }
         )
 
-        contract = (
-            contract
-            .merge(oldest)
-            .merge(latest)
-        )
+        contract = contract.merge(oldest).merge(latest)
 
         contract["POSX_PROGRESS"] = (
             contract["POSX_OLDEST_REMAINING_RATIO"]
@@ -3334,13 +3049,10 @@ def _(np):
         )
 
         contract["POSX_RECENT_WORSENING"] = (
-            contract["POSX_RECENT6_DPD_SHARE"]
-            - contract["POSX_DPD_SHARE"]
+            contract["POSX_RECENT6_DPD_SHARE"] - contract["POSX_DPD_SHARE"]
         )
 
-        contract["POSX_BAD_LATEST"] = (
-            contract["POSX_LATEST_DPD"] > 0
-        ).astype(float)
+        contract["POSX_BAD_LATEST"] = (contract["POSX_LATEST_DPD"] > 0).astype(float)
 
         client = (
             contract.groupby("SK_ID_CURR")
@@ -3348,7 +3060,6 @@ def _(np):
                 POSX_MEAN_LATEST_DPD=("POSX_LATEST_DPD", "mean"),
                 POSX_MAX_LATEST_DPD=("POSX_LATEST_DPD", "max"),
                 POSX_BAD_LATEST_SHARE=("POSX_BAD_LATEST", "mean"),
-
                 POSX_MEAN_RECENT6_DPD_SHARE=(
                     "POSX_RECENT6_DPD_SHARE",
                     "mean",
@@ -3357,7 +3068,6 @@ def _(np):
                     "POSX_RECENT6_DPD_SHARE",
                     "max",
                 ),
-
                 POSX_MEAN_RECENT_WORSENING=(
                     "POSX_RECENT_WORSENING",
                     "mean",
@@ -3366,7 +3076,6 @@ def _(np):
                     "POSX_RECENT_WORSENING",
                     "max",
                 ),
-
                 POSX_MEAN_PROGRESS=(
                     "POSX_PROGRESS",
                     "mean",
@@ -3386,9 +3095,7 @@ def _(np):
 
 @app.cell
 def _(build_pos_dynamic_features, pos_cash_balance):
-    posx_features = build_pos_dynamic_features(
-        pos_cash_balance
-    )
+    posx_features = build_pos_dynamic_features(pos_cash_balance)
     return (posx_features,)
 
 
@@ -3397,25 +3104,23 @@ def _(mo):
     mo.md(r"""
     # Bureau balance
     """)
-    return
 
 
 @app.cell
 def _(bureau_balance):
     bureau_balance.head()
-    return
 
 
 @app.cell
 def _(bureau_balance):
-    print(bureau_balance["MONTHS_BALANCE"].min(), bureau_balance["MONTHS_BALANCE"].max())
-    return
+    print(
+        bureau_balance["MONTHS_BALANCE"].min(), bureau_balance["MONTHS_BALANCE"].max()
+    )
 
 
 @app.cell
 def _(bureau_balance):
     bureau_balance["STATUS"].value_counts(dropna=False).sort_index()
-    return
 
 
 @app.cell(hide_code=True)
@@ -3423,7 +3128,6 @@ def _(mo):
     mo.md(r"""
     ## BB1 - monthly bureau delinquency history
     """)
-    return
 
 
 @app.cell
@@ -3441,13 +3145,11 @@ def _(bureau_balance):
         "5": 5,
     }
 
-    bureau_balance["BB_STATUS_SEVERITY"] = (
-        bureau_balance["STATUS"].map(severity_map)
-    )
+    bureau_balance["BB_STATUS_SEVERITY"] = bureau_balance["STATUS"].map(severity_map)
 
-    bureau_balance["BB_HAS_DPD"] = (
-        bureau_balance["STATUS"].isin(DPD_STATUSES)
-    ).astype("int8")
+    bureau_balance["BB_HAS_DPD"] = (bureau_balance["STATUS"].isin(DPD_STATUSES)).astype(
+        "int8"
+    )
 
     bureau_balance["BB_HAS_SEVERE_DPD"] = (
         bureau_balance["STATUS"].isin(SEVERE_DPD_STATUSES)
@@ -3465,27 +3167,22 @@ def _(bureau_balance):
         bureau_balance.groupby("SK_ID_BUREAU")
         .agg(
             BB_MONTHS_OBSERVED=("MONTHS_BALANCE", "size"),
-
             BB_HISTORY_AGE_MONTHS=(
                 "MONTHS_BALANCE",
                 lambda x: -x.min(),
             ),
-
             BB_MAX_STATUS_SEVERITY=(
                 "BB_STATUS_SEVERITY",
                 "max",
             ),
-
             BB_DPD_MONTH_COUNT=(
                 "BB_HAS_DPD",
                 "sum",
             ),
-
             BB_SEVERE_DPD_MONTH_COUNT=(
                 "BB_HAS_SEVERE_DPD",
                 "sum",
             ),
-
             BB_KNOWN_STATUS_MONTH_COUNT=(
                 "BB_IS_KNOWN_STATUS",
                 "sum",
@@ -3498,23 +3195,18 @@ def _(bureau_balance):
 
 @app.cell
 def _(bb_base, np):
-    bb_base["BB_DPD_MONTH_SHARE"] = (
-        bb_base["BB_DPD_MONTH_COUNT"]
-        / bb_base["BB_KNOWN_STATUS_MONTH_COUNT"].replace(0, np.nan)
-    )
+    bb_base["BB_DPD_MONTH_SHARE"] = bb_base["BB_DPD_MONTH_COUNT"] / bb_base[
+        "BB_KNOWN_STATUS_MONTH_COUNT"
+    ].replace(0, np.nan)
 
-    bb_base["BB_SEVERE_DPD_MONTH_SHARE"] = (
-        bb_base["BB_SEVERE_DPD_MONTH_COUNT"]
-        / bb_base["BB_KNOWN_STATUS_MONTH_COUNT"].replace(0, np.nan)
-    )
-    return
+    bb_base["BB_SEVERE_DPD_MONTH_SHARE"] = bb_base[
+        "BB_SEVERE_DPD_MONTH_COUNT"
+    ] / bb_base["BB_KNOWN_STATUS_MONTH_COUNT"].replace(0, np.nan)
 
 
 @app.cell
 def _(DPD_STATUSES, bureau_balance):
-    bb_dpd = bureau_balance[
-        bureau_balance["STATUS"].isin(DPD_STATUSES)
-    ]
+    bb_dpd = bureau_balance[bureau_balance["STATUS"].isin(DPD_STATUSES)]
 
     bb_last_dpd = (
         bb_dpd.groupby("SK_ID_BUREAU")
@@ -3531,9 +3223,7 @@ def _(DPD_STATUSES, bureau_balance):
 
 @app.cell
 def _(KNOWN_PAYMENT_STATUSES, bureau_balance, np):
-    bb_recent = bureau_balance[
-        bureau_balance["MONTHS_BALANCE"] >= -12
-    ].copy()
+    bb_recent = bureau_balance[bureau_balance["MONTHS_BALANCE"] >= -12].copy()
 
     bb_recent["BB_RECENT_KNOWN"] = (
         bb_recent["STATUS"].isin(KNOWN_PAYMENT_STATUSES)
@@ -3558,20 +3248,17 @@ def _(KNOWN_PAYMENT_STATUSES, bureau_balance, np):
         .reset_index()
     )
 
-    bb_recent_agg["BB_RECENT_12M_DPD_SHARE"] = (
-        bb_recent_agg["BB_RECENT_12M_DPD_COUNT"]
-        / bb_recent_agg["BB_RECENT_12M_KNOWN_COUNT"].replace(0, np.nan)
-    )
+    bb_recent_agg["BB_RECENT_12M_DPD_SHARE"] = bb_recent_agg[
+        "BB_RECENT_12M_DPD_COUNT"
+    ] / bb_recent_agg["BB_RECENT_12M_KNOWN_COUNT"].replace(0, np.nan)
     return (bb_recent_agg,)
 
 
 @app.cell
 def _(bb_base, bb_last_dpd, bb_recent_agg, bureau):
-    bb_credit_features = (
-        bb_base
-        .merge(bb_last_dpd, on="SK_ID_BUREAU", how="left")
-        .merge(bb_recent_agg, on="SK_ID_BUREAU", how="left")
-    )
+    bb_credit_features = bb_base.merge(
+        bb_last_dpd, on="SK_ID_BUREAU", how="left"
+    ).merge(bb_recent_agg, on="SK_ID_BUREAU", how="left")
 
     bb_credit_features = bb_credit_features.merge(
         bureau[["SK_ID_BUREAU", "SK_ID_CURR"]],
@@ -3588,14 +3275,11 @@ def _(bb_credit_features):
         .agg(
             BB_TOTAL_MONTHS_OBSERVED=("BB_MONTHS_OBSERVED", "sum"),
             BB_MAX_HISTORY_AGE_MONTHS=("BB_HISTORY_AGE_MONTHS", "max"),
-
             BB_MAX_STATUS_SEVERITY=("BB_MAX_STATUS_SEVERITY", "max"),
             BB_MEAN_DPD_MONTH_SHARE=("BB_DPD_MONTH_SHARE", "mean"),
             BB_MAX_DPD_MONTH_SHARE=("BB_DPD_MONTH_SHARE", "max"),
             BB_MEAN_SEVERE_DPD_MONTH_SHARE=("BB_SEVERE_DPD_MONTH_SHARE", "mean"),
-
             BB_MONTHS_SINCE_LAST_DPD=("BB_MONTHS_SINCE_LAST_DPD", "min"),
-
             BB_RECENT_12M_MAX_SEVERITY=("BB_RECENT_12M_MAX_SEVERITY", "max"),
             BB_RECENT_12M_MEAN_DPD_SHARE=("BB_RECENT_12M_DPD_SHARE", "mean"),
         )
@@ -3618,7 +3302,6 @@ def _(bb_history, modeling_pos2):
 @app.cell
 def _(modeling_bb1):
     modeling_bb1.to_parquet("data/processed/modeling_bb1.parquet", index=False)
-    return
 
 
 @app.cell(hide_code=True)
@@ -3629,7 +3312,6 @@ def _(mo):
     ### Objective / Hypothesis
     Construct temporal bureau balance features from monthly status records, mapping status codes to ordinal severity levels and tracking recent 6-month and 12-month delinquency rates, maximum severity, and recent status worsening.
     """)
-    return
 
 
 @app.cell
@@ -3639,9 +3321,7 @@ def _(np):
         bureau,
     ):
         x = bureau_balance.merge(
-            bureau[
-                ["SK_ID_BUREAU", "SK_ID_CURR"]
-            ],
+            bureau[["SK_ID_BUREAU", "SK_ID_CURR"]],
             on="SK_ID_BUREAU",
             how="inner",
             validate="many_to_one",
@@ -3660,19 +3340,13 @@ def _(np):
             "X": np.nan,
         }
 
-        x["BBX_SEVERITY"] = (
-            x["STATUS"].map(severity_map)
-        )
+        x["BBX_SEVERITY"] = x["STATUS"].map(severity_map)
 
-        x["BBX_DELINQUENT"] = (
-            x["BBX_SEVERITY"] > 0
-        ).astype(float)
+        x["BBX_DELINQUENT"] = (x["BBX_SEVERITY"] > 0).astype(float)
 
         recent6 = (
             x.loc[x["MONTHS_BALANCE"] >= -6]
-            .groupby(
-                ["SK_ID_CURR", "SK_ID_BUREAU"]
-            )
+            .groupby(["SK_ID_CURR", "SK_ID_BUREAU"])
             .agg(
                 BBX_RECENT6_DELINQ_SHARE=(
                     "BBX_DELINQUENT",
@@ -3687,9 +3361,7 @@ def _(np):
 
         recent12 = (
             x.loc[x["MONTHS_BALANCE"] >= -12]
-            .groupby(
-                ["SK_ID_CURR", "SK_ID_BUREAU"]
-            )
+            .groupby(["SK_ID_CURR", "SK_ID_BUREAU"])
             .agg(
                 BBX_RECENT12_DELINQ_SHARE=(
                     "BBX_DELINQUENT",
@@ -3699,9 +3371,7 @@ def _(np):
         )
 
         account = (
-            x.groupby(
-                ["SK_ID_CURR", "SK_ID_BUREAU"]
-            )
+            x.groupby(["SK_ID_CURR", "SK_ID_BUREAU"])
             .agg(
                 BBX_MONTHS_OBSERVED=(
                     "MONTHS_BALANCE",
@@ -3721,15 +3391,10 @@ def _(np):
             .reset_index()
         )
 
-        delinquent = x.loc[
-            x["BBX_DELINQUENT"] == 1
-        ]
+        delinquent = x.loc[x["BBX_DELINQUENT"] == 1]
 
         last_delinquency = (
-            delinquent
-            .groupby(
-                ["SK_ID_CURR", "SK_ID_BUREAU"]
-            )["MONTHS_BALANCE"]
+            delinquent.groupby(["SK_ID_CURR", "SK_ID_BUREAU"])["MONTHS_BALANCE"]
             .max()
             .rename("BBX_LAST_DELINQUENCY_MONTH")
             .reset_index()
@@ -3741,13 +3406,10 @@ def _(np):
             on=["SK_ID_CURR", "SK_ID_BUREAU"],
         )
 
-        account["BBX_MONTHS_SINCE_DELINQUENCY"] = (
-            -account["BBX_LAST_DELINQUENCY_MONTH"]
-        )
+        account["BBX_MONTHS_SINCE_DELINQUENCY"] = -account["BBX_LAST_DELINQUENCY_MONTH"]
 
         account["BBX_RECENT_WORSENING"] = (
-            account["BBX_RECENT6_DELINQ_SHARE"]
-            - account["BBX_ALL_DELINQ_SHARE"]
+            account["BBX_RECENT6_DELINQ_SHARE"] - account["BBX_ALL_DELINQ_SHARE"]
         )
 
         account["BBX_RECENT_DELINQUENT_ACCOUNT"] = (
@@ -3761,7 +3423,6 @@ def _(np):
                     "BBX_RECENT_DELINQUENT_ACCOUNT",
                     "mean",
                 ),
-
                 BBX_MEAN_RECENT6_DELINQ_SHARE=(
                     "BBX_RECENT6_DELINQ_SHARE",
                     "mean",
@@ -3770,12 +3431,10 @@ def _(np):
                     "BBX_RECENT6_DELINQ_SHARE",
                     "max",
                 ),
-
                 BBX_MEAN_RECENT12_DELINQ_SHARE=(
                     "BBX_RECENT12_DELINQ_SHARE",
                     "mean",
                 ),
-
                 BBX_MAX_SEVERITY=(
                     "BBX_MAX_SEVERITY",
                     "max",
@@ -3784,12 +3443,10 @@ def _(np):
                     "BBX_RECENT6_MAX_SEVERITY",
                     "max",
                 ),
-
                 BBX_MIN_MONTHS_SINCE_DELINQUENCY=(
                     "BBX_MONTHS_SINCE_DELINQUENCY",
                     "min",
                 ),
-
                 BBX_MEAN_RECENT_WORSENING=(
                     "BBX_RECENT_WORSENING",
                     "mean",
@@ -3823,7 +3480,6 @@ def _(mo):
 
     Merge all historical and candidate dynamic feature tables with the base application dataset to produce the final comprehensive research dataset (`data/processed/modeling_final.parquet`).
     """)
-    return
 
 
 @app.cell
@@ -3856,25 +3512,21 @@ def _(bbx_features, ipx_features, pd, posx_features):
 @app.cell
 def _(ipx_features):
     ipx_features.columns
-    return
 
 
 @app.cell
 def _(posx_features):
     posx_features.columns
-    return
 
 
 @app.cell
 def _(bbx_features):
     bbx_features.columns
-    return
 
 
 @app.cell
 def _(training_dataset):
     training_dataset.shape
-    return
 
 
 @app.cell
@@ -3883,7 +3535,6 @@ def _(training_dataset):
         "data/processed/modeling_final.parquet",
         index=False,
     )
-    return
 
 
 @app.cell(hide_code=True)
@@ -3906,7 +3557,6 @@ def _(mo):
 
     **DATASET RESEARCH STAGE CLOSED**
     """)
-    return
 
 
 if __name__ == "__main__":

@@ -48,9 +48,8 @@ def build_credit_card_features(
     # Activity flags and utilization
     cc["CC_HAS_BALANCE"] = cc["AMT_BALANCE"] != 0
     cc["CC_HAS_DRAWINGS"] = cc["AMT_DRAWINGS_CURRENT"] != 0
-    cc["CC_UTILIZATION"] = (
-        cc["AMT_BALANCE"]
-        / cc["AMT_CREDIT_LIMIT_ACTUAL"].replace(0, np.nan)
+    cc["CC_UTILIZATION"] = cc["AMT_BALANCE"] / cc["AMT_CREDIT_LIMIT_ACTUAL"].replace(
+        0, np.nan
     )
 
     # Historical aggregations across all observed months
@@ -72,10 +71,7 @@ def build_credit_card_features(
 
     # Latest observed month per card contract
     cc_latest = (
-        cc
-        .sort_values(["SK_ID_PREV", "MONTHS_BALANCE"])
-        .groupby("SK_ID_PREV")
-        .tail(1)
+        cc.sort_values(["SK_ID_PREV", "MONTHS_BALANCE"]).groupby("SK_ID_PREV").tail(1)
     )
 
     cc_latest_agg = (

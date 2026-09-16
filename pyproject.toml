@@ -2,33 +2,52 @@
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+
 [project]
 name = "home-credit"
 version = "0.1.0"
-description = "End-to-end machine learning project for credit default risk prediction using the Home Credit dataset"
+description = "End-to-end machine learning project for credit default risk prediction"
 readme = "README.md"
 requires-python = ">=3.12"
+
 dependencies = [
     "catboost>=1.2.10",
+    "numpy>=2.0.0",
+    "pandas>=2.2,<3",
+    "pyarrow>=25.0.0",
+]
+
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.1",
+    "pyright>=1.1.414",
+    "ruff>=0.16.7",
+]
+
+research = [
     "lightgbm>=4.7.0",
     "marimo>=0.23.16",
     "matplotlib>=3.11.1",
-    "mlflow==3.15.1",
-    "numpy>=2.0.0",
+    "mlflow>=3.15.1",
     "optuna>=4.9.0",
-    "pandas>=2.2,<3",
     "plotly>=5.24.0",
-    "pyarrow>=25.0.1",
     "scikit-learn>=1.9.0",
     "scipy>=1.18.0",
     "seaborn>=0.13.2",
     "xgboost>=3.4.1",
 ]
 
-[dependency-groups]
-dev = [
-    "pytest>=9.1.1",
-]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/home_credit"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+
+[tool.ruff.format]
+quote-style = "double"

@@ -38,7 +38,6 @@ def _(mo):
 
     The inability to enforce customer-group and calendar-time validation is an explicit limitation of the dataset.
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -46,39 +45,30 @@ def _(mo):
     mo.md(r"""
     ## Imports and settings
     """)
-    return
 
 
 @app.cell
 def _():
-    import pandas as pd
-    import numpy as np
+    import json
+    import tempfile
+    import time
+    from pathlib import Path
 
+    import lightgbm as lgb
     import mlflow
-
-    from sklearn.model_selection import train_test_split, StratifiedKFold
+    import numpy as np
+    import optuna
+    import pandas as pd
+    import plotly.express as px
+    import xgboost as xgb
+    from catboost import CatBoostClassifier, Pool
+    from scipy.stats import spearmanr
     from sklearn.metrics import (
         average_precision_score,
         log_loss,
         roc_auc_score,
     )
-    from pathlib import Path
-
-    import json
-    import tempfile
-    import time
-
-    from catboost import CatBoostClassifier, Pool
-
-    import lightgbm as lgb
-
-    import xgboost as xgb
-
-    import plotly.express as px
-
-    import optuna
-
-    from scipy.stats import spearmanr, rankdata
+    from sklearn.model_selection import StratifiedKFold, train_test_split
 
     try:
         from home_credit.features.assemble import build_test_features
@@ -149,7 +139,6 @@ def _(mo):
     mo.md(r"""
     ## Split
     """)
-    return
 
 
 @app.cell
@@ -170,7 +159,7 @@ def _(
         target_column: str = TARGET,
         holdout_size: float = HOLDOUT_SIZE,
         n_splits: int = N_SPLITS,
-        random_state: int = RANDOM_STATE
+        random_state: int = RANDOM_STATE,
     ) -> pd.DataFrame:
         """
         Create a manifest DataFrame that contains the split information for each row in the input DataFrame.
@@ -198,7 +187,7 @@ def _(
             np.arange(len(frame)),
             test_size=holdout_size,
             stratify=frame[target_column],
-            random_state=random_state
+            random_state=random_state,
         )
 
         manifest = frame[[id_column, target_column]].copy()
@@ -209,7 +198,9 @@ def _(
 
         development = frame.loc[development_idx]
 
-        splitter = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=random_state)
+        splitter = StratifiedKFold(
+            n_splits=n_splits, shuffle=True, random_state=random_state
+        )
 
         for fold_id, (_, valid_positions) in enumerate(
             splitter.split(development, development[target_column])
@@ -217,12 +208,10 @@ def _(
             valid_idx = development_idx[valid_positions]
             manifest.loc[valid_idx, "fold"] = fold_id
 
-        if manifest.loc[
-            manifest["partition"].eq("development"), "fold"].isnull().any():
+        if manifest.loc[manifest["partition"].eq("development"), "fold"].isnull().any():
             raise ValueError("Some development rows were not assigned a fold.")
 
-        if manifest.loc[
-            manifest["partition"].eq("holdout"), "fold"].notnull().any():
+        if manifest.loc[manifest["partition"].eq("holdout"), "fold"].notnull().any():
             raise ValueError("Some holdout rows were incorrectly assigned a fold.")
 
         return manifest.reset_index(drop=True)
@@ -239,25 +228,19 @@ def _(applications, create_split_manifest):
 
 @app.cell
 def _(ID_COLUMN, TARGET, split_manifest):
-    partition_profile = (
-        split_manifest
-        .groupby("partition", observed=True)
-        .agg(
-            rows=(ID_COLUMN, "size"),
-            positives=(TARGET, "sum"),
-            prevalence=(TARGET, "mean"),
-        )
+    partition_profile = split_manifest.groupby("partition", observed=True).agg(
+        rows=(ID_COLUMN, "size"),
+        positives=(TARGET, "sum"),
+        prevalence=(TARGET, "mean"),
     )
 
     partition_profile
-    return
 
 
 @app.cell
 def _(ID_COLUMN, TARGET, split_manifest):
     fold_profile = (
-        split_manifest
-        .query("partition == 'development'")
+        split_manifest.query("partition == 'development'")
         .groupby("fold", observed=True)
         .agg(
             rows=(ID_COLUMN, "size"),
@@ -267,7 +250,6 @@ def _(ID_COLUMN, TARGET, split_manifest):
     )
 
     fold_profile
-    return
 
 
 @app.cell
@@ -284,7 +266,6 @@ def _(ID_COLUMN, split_manifest):
         "Holdout:",
         split_manifest["partition"].eq("holdout").sum(),
     )
-    return
 
 
 @app.cell
@@ -293,7 +274,6 @@ def _(split_manifest, split_path):
         split_path,
         index=False,
     )
-    return
 
 
 @app.cell(hide_code=True)
@@ -317,7 +297,6 @@ def _(mo):
 
     No applicants younger than 18 are present in the labeled dataset, so the `age >= 18` eligibility rule does not modify the offline modeling population.
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -325,14 +304,12 @@ def _(mo):
     mo.md(r"""
     ## Baseline
     """)
-    return
 
 
 @app.cell
 def _(applications):
     print(applications.shape)
     print(applications.columns.tolist())
-    return
 
 
 @app.cell
@@ -350,13 +327,12 @@ def _(applications):
                 "SUM",
                 "MIN",
                 "MAX",
-                "STD"
+                "STD",
             )
         )
     ]
 
     engineered_candidates
-    return
 
 
 @app.cell(hide_code=True)
@@ -410,7 +386,6 @@ def _(mo):
     Establish the reference model against which all subsequent feature bundles,
     ablations and model changes will be compared.
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -418,7 +393,6 @@ def _(mo):
     mo.md(r"""
     ### Functions
     """)
-    return
 
 
 @app.cell
@@ -451,13 +425,13 @@ def _(np):
 
 @app.cell
 def _(pd):
-    def prepare_development_data(
-        frame: pd.DataFrame
-    ) -> pd.DataFrame:
+    def prepare_development_data(frame: pd.DataFrame) -> pd.DataFrame:
 
-        development = frame.loc[frame["partition"]=="development"].reset_index(drop=True).copy()
+        development = (
+            frame.loc[frame["partition"] == "development"].reset_index(drop=True).copy()
+        )
 
-        if development['fold'].isna().any():
+        if development["fold"].isna().any():
             raise ValueError("Development dataset contains NaN values in fold column")
 
         return development
@@ -479,23 +453,15 @@ def _(np, pd):
         selected_indices = []
 
         for target_value in sorted(train[target].unique()):
-            class_indices = train.index[
-                train[target].eq(target_value)
-            ].to_numpy()
+            class_indices = train.index[train[target].eq(target_value)].to_numpy()
 
-            rng = np.random.default_rng(
-                random_state + int(target_value)
-            )
+            rng = np.random.default_rng(random_state + int(target_value))
 
             shuffled = rng.permutation(class_indices)
 
-            n_selected = int(
-                np.ceil(len(shuffled) * fraction)
-            )
+            n_selected = int(np.ceil(len(shuffled) * fraction))
 
-            selected_indices.extend(
-                shuffled[:n_selected]
-            )
+            selected_indices.extend(shuffled[:n_selected])
 
         return train.loc[selected_indices].copy()
 
@@ -528,16 +494,11 @@ def _(np, pd):
 
         total_shap = fold_shap["mean_abs_shap"].sum()
 
-        fold_shap["normalized_shap"] = (
-            fold_shap["mean_abs_shap"] / total_shap
-        )
+        fold_shap["normalized_shap"] = fold_shap["mean_abs_shap"] / total_shap
 
-        fold_shap["rank"] = (
-            fold_shap["mean_abs_shap"]
-            .rank(
-                method="average",
-                ascending=False,
-            )
+        fold_shap["rank"] = fold_shap["mean_abs_shap"].rank(
+            method="average",
+            ascending=False,
         )
 
         fold_shap["fold"] = int(fold_id)
@@ -553,8 +514,7 @@ def _(pd):
         shap_cv: pd.DataFrame,
     ) -> pd.DataFrame:
         shap_summary = (
-            shap_cv
-            .groupby("feature")
+            shap_cv.groupby("feature")
             .agg(
                 mean_abs_shap=("mean_abs_shap", "mean"),
                 mean_normalized_shap=("normalized_shap", "mean"),
@@ -589,7 +549,7 @@ def _(
         features: list[str],
         categorical_features: list[str],
         params: dict,
-        train_fraction: float = 1.0
+        train_fraction: float = 1.0,
     ) -> dict:
 
         train_mask = development["fold"].ne(fold_id)
@@ -605,13 +565,15 @@ def _(
             data=train[features],
             label=train[TARGET],
             cat_features=categorical_features,
-            feature_names=features)
+            feature_names=features,
+        )
 
         val_pool = Pool(
             data=val[features],
             label=val[TARGET],
             cat_features=categorical_features,
-            feature_names=features)
+            feature_names=features,
+        )
 
         model = CatBoostClassifier(**params)
 
@@ -641,7 +603,7 @@ def _(
             "train": train,
             "valid": val,
             "evals_result": evals_result,
-            "fit_seconds": fit_seconds
+            "fit_seconds": fit_seconds,
         }
 
     return (train_catboost_fold,)
@@ -658,13 +620,15 @@ def _(pd):
         for dataset_name, metrics in evals_result.items():
             for metric_name, values in metrics.items():
                 for iteration, value in enumerate(values, start=1):
-                    rows.append({
-                        "fold": int(fold_id),
-                        "iteration": iteration,
-                        "dataset": dataset_name,
-                        "metric": metric_name,
-                        "value": float(value),
-                    })
+                    rows.append(
+                        {
+                            "fold": int(fold_id),
+                            "iteration": iteration,
+                            "dataset": dataset_name,
+                            "metric": metric_name,
+                            "value": float(value),
+                        }
+                    )
 
         return pd.DataFrame(rows)
 
@@ -685,7 +649,7 @@ def _(average_precision_score, log_loss, roc_auc_score):
         return {
             "ap": float(ap),
             "roc_auc": float(roc_auc),
-            "log_loss": float(log_loss_value)
+            "log_loss": float(log_loss_value),
         }
 
     return (calculate_classification_metrics,)
@@ -699,28 +663,22 @@ def _(TARGET, calculate_classification_metrics, metrics_at_capacity):
         capacity: float = 0.10,
     ) -> dict:
 
-        train = fold_result['train']
-        val = fold_result['valid']
+        train = fold_result["train"]
+        val = fold_result["valid"]
 
-        train_probability = fold_result['train_probability']
-        val_probability = fold_result['valid_probability']
+        train_probability = fold_result["train_probability"]
+        val_probability = fold_result["valid_probability"]
 
-        model = fold_result['model']
+        model = fold_result["model"]
 
         train_metrics = calculate_classification_metrics(
-            train[TARGET],
-            train_probability
+            train[TARGET], train_probability
         )
 
-        val_metrics = calculate_classification_metrics(
-            val[TARGET],
-            val_probability
-        )
+        val_metrics = calculate_classification_metrics(val[TARGET], val_probability)
 
         val_metrics_capacity = metrics_at_capacity(
-            val[TARGET],
-            val_probability,
-            capacity=capacity
+            val[TARGET], val_probability, capacity=capacity
         )
 
         best_iter = model.get_best_iteration()
@@ -728,16 +686,16 @@ def _(TARGET, calculate_classification_metrics, metrics_at_capacity):
         return {
             "fold": fold_id,
             "rows": len(val),
-            "positives": int(val['TARGET'].sum()),
-            "train_ap": train_metrics['ap'],
-            "valid_ap": val_metrics['ap'],
-            "ap_gap": train_metrics['ap'] - val_metrics['ap'],
-            "roc_auc": val_metrics['roc_auc'],
-            "log_loss": val_metrics['log_loss'],
-            "recall_at_10pct": val_metrics_capacity['recall_at_10pct'],
-            "precision_at_10pct": val_metrics_capacity['precision_at_10pct'],
+            "positives": int(val["TARGET"].sum()),
+            "train_ap": train_metrics["ap"],
+            "valid_ap": val_metrics["ap"],
+            "ap_gap": train_metrics["ap"] - val_metrics["ap"],
+            "roc_auc": val_metrics["roc_auc"],
+            "log_loss": val_metrics["log_loss"],
+            "recall_at_10pct": val_metrics_capacity["recall_at_10pct"],
+            "precision_at_10pct": val_metrics_capacity["precision_at_10pct"],
             "best_iteration": best_iter,
-            "fit_seconds": fit_seconds
+            "fit_seconds": fit_seconds,
         }
 
     return (calculate_fold_metrics,)
@@ -750,23 +708,19 @@ def _(TARGET, calculate_classification_metrics, metrics_at_capacity, pd):
         capacity: float = 0.10,
     ) -> dict:
 
-        metrics = calculate_classification_metrics(
-        oof[TARGET],
-        oof["probability"])
+        metrics = calculate_classification_metrics(oof[TARGET], oof["probability"])
 
         capacity_metrics = metrics_at_capacity(
-            oof[TARGET],
-            oof['probability'],
-            capacity=capacity
+            oof[TARGET], oof["probability"], capacity=capacity
         )
 
         return {
-                "oof_ap": metrics['ap'],
-                "oof_roc_auc": metrics['roc_auc'],
-                "oof_log_loss": metrics['log_loss'],
-                "oof_recall_at_10pct": capacity_metrics['recall_at_10pct'],
-                "oof_precision_at_10pct": capacity_metrics['precision_at_10pct'],
-            }
+            "oof_ap": metrics["ap"],
+            "oof_roc_auc": metrics["roc_auc"],
+            "oof_log_loss": metrics["log_loss"],
+            "oof_recall_at_10pct": capacity_metrics["recall_at_10pct"],
+            "oof_precision_at_10pct": capacity_metrics["precision_at_10pct"],
+        }
 
     return (calculate_oof_metrics,)
 
@@ -774,15 +728,10 @@ def _(TARGET, calculate_classification_metrics, metrics_at_capacity, pd):
 @app.cell
 def _(calculate_oof_metrics, pd):
     def calculate_cv_summary(
-        fold_metrics: pd.DataFrame,
-        oof: pd.DataFrame,
-        capacity: float = 0.10
+        fold_metrics: pd.DataFrame, oof: pd.DataFrame, capacity: float = 0.10
     ) -> dict:
 
-        oof_metrics = calculate_oof_metrics(
-            oof,
-            capacity=capacity
-        )
+        oof_metrics = calculate_oof_metrics(oof, capacity=capacity)
 
         fold_ap_mean = fold_metrics["valid_ap"].mean()
         fold_ap_std = fold_metrics["valid_ap"].std()
@@ -790,17 +739,16 @@ def _(calculate_oof_metrics, pd):
         best_iteration_median = fold_metrics["best_iteration"].median()
 
         return {
-            "oof_ap": oof_metrics['oof_ap'],
-            "oof_roc_auc": oof_metrics['oof_roc_auc'],
-            "oof_log_loss": oof_metrics['oof_log_loss'],
-            "oof_recall_at_10pct": oof_metrics['oof_recall_at_10pct'],
-            "oof_precision_at_10pct": oof_metrics['oof_precision_at_10pct'],
+            "oof_ap": oof_metrics["oof_ap"],
+            "oof_roc_auc": oof_metrics["oof_roc_auc"],
+            "oof_log_loss": oof_metrics["oof_log_loss"],
+            "oof_recall_at_10pct": oof_metrics["oof_recall_at_10pct"],
+            "oof_precision_at_10pct": oof_metrics["oof_precision_at_10pct"],
             "fold_ap_mean": fold_ap_mean,
             "fold_ap_std": fold_ap_std,
             "mean_ap_gap": mean_ap_gap,
             "best_iteration_median": best_iteration_median,
-            "total_fit_seconds": float(fold_metrics["fit_seconds"].sum()
-        )
+            "total_fit_seconds": float(fold_metrics["fit_seconds"].sum()),
         }
 
     return (calculate_cv_summary,)
@@ -826,16 +774,12 @@ def _(
         categorical_features: list[str],
         params: dict,
         capacity: float = 0.10,
-        calculate_shap: bool = False
+        calculate_shap: bool = False,
     ):
 
         development = prepare_development_data(frame)
 
-        oof_probability = np.full(
-            len(development),
-            np.nan,
-            np.float64
-        )
+        oof_probability = np.full(len(development), np.nan, np.float64)
 
         fold_rows = []
         curve_frames = []
@@ -843,19 +787,15 @@ def _(
 
         all_params = None
 
-        for fold_id in sorted(
-            development["fold"].dropna().unique()
-        ):
+        for fold_id in sorted(development["fold"].dropna().unique()):
             fold_result = train_catboost_fold(
-                development, fold_id, features,
-                categorical_features, params)
+                development, fold_id, features, categorical_features, params
+            )
 
             if all_params is None:
                 all_params = fold_result["model"].get_all_params()
 
-            fold_result_metrics = calculate_fold_metrics(
-                fold_result, fold_id, capacity
-            )
+            fold_result_metrics = calculate_fold_metrics(fold_result, fold_id, capacity)
             curve_frame = curves_to_frame(
                 fold_result["evals_result"],
                 fold_id=fold_id,
@@ -865,7 +805,9 @@ def _(
 
             fold_rows.append(fold_result_metrics)
 
-            oof_probability[fold_result['valid_positions']] = fold_result['valid_probability']
+            oof_probability[fold_result["valid_positions"]] = fold_result[
+                "valid_probability"
+            ]
 
             if calculate_shap:
                 fold_shap = calculate_fold_shap(
@@ -877,20 +819,19 @@ def _(
 
         learning_curves = pd.concat(
             curve_frames,
-            ignore_index=True,)
+            ignore_index=True,
+        )
 
         if np.isnan(oof_probability).any():
-            raise RuntimeError('OOF predictions are incomplete.')
+            raise RuntimeError("OOF predictions are incomplete.")
 
         fold_metrics = pd.DataFrame(fold_rows)
 
-        oof = development[[ID_COLUMN, TARGET, 'fold']].copy()
-        oof['probability'] = oof_probability
+        oof = development[[ID_COLUMN, TARGET, "fold"]].copy()
+        oof["probability"] = oof_probability
 
         summary = calculate_cv_summary(
-            fold_metrics=fold_metrics,
-            oof=oof,
-            capacity=capacity
+            fold_metrics=fold_metrics, oof=oof, capacity=capacity
         )
 
         if calculate_shap:
@@ -899,9 +840,7 @@ def _(
                 ignore_index=True,
             )
 
-            shap_summary = summarize_cv_shap(
-                shap_cv
-            )
+            shap_summary = summarize_cv_shap(shap_cv)
         else:
             shap_cv = None
             shap_summary = None
@@ -926,14 +865,16 @@ def _(mlflow, pd):
     ) -> None:
 
         for _, row in fold_metrics.iterrows():
-            fold_id = int(row['fold'])
-            mlflow.log_metric(f"{fold_id}_valid_ap", row['valid_ap'])
-            mlflow.log_metric(f"{fold_id}_train_ap", row['train_ap'])
-            mlflow.log_metric(f"{fold_id}_ap_gap", row['ap_gap'])
-            mlflow.log_metric(f"{fold_id}_roc_auc", row['roc_auc'])
-            mlflow.log_metric(f"{fold_id}_log_loss", row['log_loss'])
-            mlflow.log_metric(f"{fold_id}_recall_at_10pct", row['recall_at_10pct'])
-            mlflow.log_metric(f"{fold_id}_precision_at_10pct", row['precision_at_10pct'])
+            fold_id = int(row["fold"])
+            mlflow.log_metric(f"{fold_id}_valid_ap", row["valid_ap"])
+            mlflow.log_metric(f"{fold_id}_train_ap", row["train_ap"])
+            mlflow.log_metric(f"{fold_id}_ap_gap", row["ap_gap"])
+            mlflow.log_metric(f"{fold_id}_roc_auc", row["roc_auc"])
+            mlflow.log_metric(f"{fold_id}_log_loss", row["log_loss"])
+            mlflow.log_metric(f"{fold_id}_recall_at_10pct", row["recall_at_10pct"])
+            mlflow.log_metric(
+                f"{fold_id}_precision_at_10pct", row["precision_at_10pct"]
+            )
 
     return (log_fold_metrics,)
 
@@ -1054,32 +995,35 @@ def _(
         params: dict,
         run_name: str = "cb_applications_raw_v1",
         capacity: float = 0.10,
-        calculate_shap: bool = False
+        calculate_shap: bool = False,
     ) -> dict:
 
         with mlflow.start_run(run_name=run_name) as run:
-
             mlflow.log_params(params)
             mlflow.log_param("n_features", len(features))
             mlflow.log_param("n_categorical_features", len(categorical_features))
             mlflow.log_param("review_capacity", capacity)
-            mlflow.set_tags({
-                "compute_backend": "gpu",
-                "gpu_device": "RTX 3060",
-            })
+            mlflow.set_tags(
+                {
+                    "compute_backend": "gpu",
+                    "gpu_device": "RTX 3060",
+                }
+            )
             result = run_catboost_baseline_cv(
                 frame=frame,
                 features=features,
                 categorical_features=categorical_features,
                 params=params,
                 capacity=capacity,
-                calculate_shap=calculate_shap
+                calculate_shap=calculate_shap,
             )
 
-            mlflow.log_params({
-                f"catboost_{key}": str(value)
-                for key, value in result["all_params"].items()
-            })
+            mlflow.log_params(
+                {
+                    f"catboost_{key}": str(value)
+                    for key, value in result["all_params"].items()
+                }
+            )
 
             mlflow.log_dict(
                 result["all_params"],
@@ -1098,7 +1042,7 @@ def _(
                 oof=result["oof"],
                 learning_curves=result["learning_curves"],
             )
-            result['run_id'] = run.info.run_id
+            result["run_id"] = run.info.run_id
 
             if calculate_shap:
                 log_shap_artifacts(
@@ -1107,9 +1051,6 @@ def _(
                 )
 
         return result
-
-
-    return
 
 
 @app.cell
@@ -1132,16 +1073,16 @@ def _(
 
         rows = []
 
-        for fold_id in development['fold'].unique():
+        for fold_id in development["fold"].unique():
             for fraction in fractions:
                 fold_result = train_catboost_fold(
-                            development=development,
-                            fold_id=fold_id,
-                            features=features,
-                            categorical_features=categorical_features,
-                            params=params,
-                            train_fraction=fraction,
-                        )
+                    development=development,
+                    fold_id=fold_id,
+                    features=features,
+                    categorical_features=categorical_features,
+                    params=params,
+                    train_fraction=fraction,
+                )
 
                 train = fold_result["train"]
                 valid = fold_result["valid"]
@@ -1167,20 +1108,11 @@ def _(
                     "train_rows": len(train),
                     "train_positives": int(train[TARGET].sum()),
                     "train_prevalence": float(train[TARGET].mean()),
-
                     "train_ap": train_metrics["ap"],
                     "valid_ap": valid_metrics["ap"],
-                    "ap_gap": (
-                        train_metrics["ap"]
-                        - valid_metrics["ap"]
-                    ),
-
+                    "ap_gap": (train_metrics["ap"] - valid_metrics["ap"]),
                     "valid_roc_auc": valid_metrics["roc_auc"],
-
-                    "best_iteration": int(
-                        model.get_best_iteration()
-                    ),
-
+                    "best_iteration": int(model.get_best_iteration()),
                     "fit_seconds": fold_result["fit_seconds"],
                 }
 
@@ -1199,8 +1131,7 @@ def _(Path, mlflow, pd, px, tempfile):
         results: pd.DataFrame,
     ) -> None:
         summary = (
-            results
-            .groupby("train_fraction")
+            results.groupby("train_fraction")
             .agg(
                 train_ap_mean=("train_ap", "mean"),
                 valid_ap_mean=("valid_ap", "mean"),
@@ -1244,15 +1175,9 @@ def _(Path, mlflow, pd, px, tempfile):
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_dir = Path(temp_dir)
 
-            results_path = (
-                temp_dir
-                / "sample_size_learning_curve.parquet"
-            )
+            results_path = temp_dir / "sample_size_learning_curve.parquet"
 
-            figure_path = (
-                temp_dir
-                / "sample_size_learning_curve.html"
-            )
+            figure_path = temp_dir / "sample_size_learning_curve.html"
 
             results.to_parquet(
                 results_path,
@@ -1291,11 +1216,13 @@ def _(
         run_name: str = "cb_applications_raw_learning_curve_v1",
     ) -> pd.DataFrame:
         with mlflow.start_run(run_name=run_name):
-            mlflow.set_tags({
-                "run_type": "diagnostic",
-                "diagnostic": "training_sample_size",
-                "parent_baseline": "cb_applications_raw_v1",
-            })
+            mlflow.set_tags(
+                {
+                    "run_type": "diagnostic",
+                    "diagnostic": "training_sample_size",
+                    "parent_baseline": "cb_applications_raw_v1",
+                }
+            )
 
             mlflow.log_params(params)
 
@@ -1331,8 +1258,6 @@ def _(
 
         return results
 
-    return
-
 
 @app.cell
 def _(
@@ -1352,27 +1277,23 @@ def _(
     ) -> float:
         params = {
             **base_params,
-
             "depth": trial.suggest_int(
                 "depth",
                 4,
                 9,
             ),
-
             "learning_rate": trial.suggest_float(
                 "learning_rate",
                 0.01,
                 0.10,
                 log=True,
             ),
-
             "l2_leaf_reg": trial.suggest_float(
                 "l2_leaf_reg",
                 1.0,
                 30.0,
                 log=True,
             ),
-
             "random_strength": trial.suggest_float(
                 "random_strength",
                 0.01,
@@ -1431,7 +1352,7 @@ def _(catboost_objective, optuna, pd, prepare_development_data):
             storage="sqlite:///optuna.db",
             direction="maximize",
             load_if_exists=True,
-            sampler=sampler
+            sampler=sampler,
         )
 
         study.optimize(
@@ -1447,24 +1368,21 @@ def _(catboost_objective, optuna, pd, prepare_development_data):
 
         return study
 
-    return
-
 
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
     ### Baseline model
     """)
-    return
 
 
 @app.cell
 def _(ID_COLUMN, applications, split_manifest):
     modeling_df = applications.merge(
         split_manifest[[ID_COLUMN, "partition", "fold"]],
-        on = ID_COLUMN,
-        how = "left",
-        validate = "one_to_one"
+        on=ID_COLUMN,
+        how="left",
+        validate="one_to_one",
     )
     if modeling_df["partition"].isna().any():
         raise RuntimeError("Some applications are missing from split_v1.")
@@ -1517,12 +1435,7 @@ def _(ID_COLUMN, TARGET, modeling_df, pd):
     print("Categorical features:", len(categorical_features))
 
     print("\nExcluded engineered features:")
-    print(
-        sorted(
-            BASELINE_EXCLUDED_FEATURES
-            & set(modeling_df.columns)
-        )
-    )
+    print(sorted(BASELINE_EXCLUDED_FEATURES & set(modeling_df.columns)))
     return baseline_features, categorical_features
 
 
@@ -1543,7 +1456,7 @@ def _():
         "custom_metric": [
             "AUC:hints=skip_train~false",
         ],
-        "border_count": 254
+        "border_count": 254,
     }
     return (BASELINE_PARAMS,)
 
@@ -1566,7 +1479,6 @@ def _(mo):
     mo.md(r"""
     ### Baseline results
     """)
-    return
 
 
 @app.cell
@@ -1586,7 +1498,9 @@ def _():
 
 @app.cell
 def _(Path, pd):
-    curves_path = Path("mlartifacts/1/e994878d33f547509b5f56312a73afa4/artifacts/curves/learning_curves.parquet")
+    curves_path = Path(
+        "mlartifacts/1/e994878d33f547509b5f56312a73afa4/artifacts/curves/learning_curves.parquet"
+    )
     baseline_curves = pd.read_parquet(curves_path)
     return (baseline_curves,)
 
@@ -1596,9 +1510,7 @@ def _(baseline_curves, px):
     fold_id = 0
     best_iteration = 1314
 
-    curve = baseline_curves.query(
-        "fold == @fold_id and metric == 'Logloss'"
-    )
+    curve = baseline_curves.query("fold == @fold_id and metric == 'Logloss'")
 
     fig = px.line(
         curve,
@@ -1621,9 +1533,7 @@ def _(baseline_curves, px):
 @app.cell
 def _(baseline_curves, px):
     fig_folds = px.line(
-        baseline_curves.query(
-            "metric == 'Logloss' and dataset == 'validation'"
-        ),
+        baseline_curves.query("metric == 'Logloss' and dataset == 'validation'"),
         x="iteration",
         y="value",
         color="fold",
@@ -1631,7 +1541,6 @@ def _(baseline_curves, px):
     )
 
     fig_folds.show()
-    return
 
 
 @app.cell
@@ -1652,15 +1561,12 @@ def _(baseline_curves, px):
     )
 
     fig_auc.show()
-    return
 
 
 @app.cell
 def _(baseline_curves, px):
     fig_auc_folds = px.line(
-        baseline_curves.query(
-            "metric == 'AUC' and dataset == 'validation'"
-        ),
+        baseline_curves.query("metric == 'AUC' and dataset == 'validation'"),
         x="iteration",
         y="value",
         color="fold",
@@ -1668,7 +1574,6 @@ def _(baseline_curves, px):
     )
 
     fig_auc_folds.show()
-    return
 
 
 @app.cell(hide_code=True)
@@ -1676,26 +1581,17 @@ def _(mo):
     mo.md(r"""
     ### Learning curve on train data volume
     """)
-    return
 
 
 @app.cell
 def _(modeling_df):
-    development = (
-        modeling_df
-        .loc[modeling_df["partition"].eq("development")]
-        .copy()
-    )
+    development = modeling_df.loc[modeling_df["partition"].eq("development")].copy()
 
     fold_id_num = 0
 
-    train_fold = development.loc[
-        development["fold"].ne(fold_id_num)
-    ]
+    train_fold = development.loc[development["fold"].ne(fold_id_num)]
 
-    valid_fold = development.loc[
-        development["fold"].eq(fold_id_num)
-    ]
+    valid_fold = development.loc[development["fold"].eq(fold_id_num)]
     return (train_fold,)
 
 
@@ -1716,7 +1612,6 @@ def _(TARGET, fold_id, make_nested_stratified_subsample, train_fold):
             f"positives={sample[TARGET].sum():,}",
             f"prevalence={sample[TARGET].mean():.5f}",
         )
-    return
 
 
 @app.cell
@@ -1776,17 +1671,18 @@ def _():
 
 @app.cell
 def _(pd):
-    baseline_fold_ap = pd.DataFrame({
-        "fold": [0, 1, 2, 3, 4],
-        "baseline_ap": [
-            0.25457559870149060,
-            0.25477822391688276,
-            0.24549256077632970,
-            0.24049969994660816,
-            0.24518262016887343,
-        ],
-    })
-    return
+    baseline_fold_ap = pd.DataFrame(
+        {
+            "fold": [0, 1, 2, 3, 4],
+            "baseline_ap": [
+                0.25457559870149060,
+                0.25477822391688276,
+                0.24549256077632970,
+                0.24049969994660816,
+                0.24518262016887343,
+            ],
+        }
+    )
 
 
 @app.cell
@@ -1806,7 +1702,6 @@ def _(pd):
         }
     )
     baseline_df
-    return
 
 
 @app.cell(hide_code=True)
@@ -1894,7 +1789,6 @@ def _(mo):
 
     The next stage is iterative single-table feature engineering, beginning with previously identified application-level hypotheses before introducing multi-table historical aggregates.
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -1959,7 +1853,6 @@ def _(mo):
     The bundle is accepted only if the improvement is reproducible across folds and
     not explained by a single favorable fold.
     """)
-    return
 
 
 @app.cell
@@ -1972,11 +1865,7 @@ def _(baseline_features):
         "EXT_SOURCES_COUNT",
     ]
 
-    ext_candidate_features = (
-        baseline_features
-        + EXT_SOURCE_BUNDLE
-    )
-    return
+    ext_candidate_features = baseline_features + EXT_SOURCE_BUNDLE
 
 
 @app.cell
@@ -2049,7 +1938,6 @@ def _(mo):
     `EXT_SOURCES_MAX`, and `EXT_SOURCES_COUNT` are not promoted to the
     accepted feature set.
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -2111,7 +1999,6 @@ def _(mo):
     Accept only if the improvement is reproducible across folds and is not driven
     by a single favorable fold.
     """)
-    return
 
 
 @app.cell
@@ -2121,11 +2008,7 @@ def _(baseline_features):
         "ANNUITY_INCOME_RATIO",
         "ANNUITY_CREDIT_RATIO",
     ]
-    financial_ratio_features = (
-        baseline_features
-        + FINANCIAL_RATIO_BUNDLE
-    )
-    return
+    financial_ratio_features = baseline_features + FINANCIAL_RATIO_BUNDLE
 
 
 @app.cell
@@ -2162,8 +2045,9 @@ def _():
 
 @app.cell
 def _(baseline_vs_financial):
-    print(f"Mean delta AP for FINANCIAL_RATIO_BUNDLE: {baseline_vs_financial['delta_ap'].mean():.6f}")
-    return
+    print(
+        f"Mean delta AP for FINANCIAL_RATIO_BUNDLE: {baseline_vs_financial['delta_ap'].mean():.6f}"
+    )
 
 
 @app.cell
@@ -2235,7 +2119,6 @@ def _(mo):
 
     The accepted E2 feature set becomes the new reference for subsequent single-table feature experiments.
     """)
-    return
 
 
 @app.cell
@@ -2308,7 +2191,6 @@ def _(mo):
     Accept the bundle only if its improvement is reproducible across folds and does
     not come at the expense of the Top-10% policy metrics.
     """)
-    return
 
 
 @app.cell
@@ -2324,41 +2206,29 @@ def _(modeling_df):
 
 @app.cell
 def _(EMPLOYMENT_HISTORY_BUNDLE, modeling_df, np):
-    np.isinf(
-        modeling_df[EMPLOYMENT_HISTORY_BUNDLE]
-        .to_numpy(dtype="float64")
-    ).sum()
-    return
+    np.isinf(modeling_df[EMPLOYMENT_HISTORY_BUNDLE].to_numpy(dtype="float64")).sum()
 
 
 @app.cell
 def _(modeling_df):
-    modeling_df[
-        "AGE_AT_CURRENT_EMPLOYMENT_START"
-    ].quantile([0, 0.001, 0.01, 0.5, 0.99, 0.999, 1])
-    return
+    modeling_df["AGE_AT_CURRENT_EMPLOYMENT_START"].quantile(
+        [0, 0.001, 0.01, 0.5, 0.99, 0.999, 1]
+    )
 
 
 @app.cell
 def _(baseline_features):
-    accepted_features_e2 = (
-        baseline_features
-        + [
-            "CREDIT_INCOME_RATIO",
-            "ANNUITY_INCOME_RATIO",
-            "ANNUITY_CREDIT_RATIO",
-        ]
-    )
+    accepted_features_e2 = baseline_features + [
+        "CREDIT_INCOME_RATIO",
+        "ANNUITY_INCOME_RATIO",
+        "ANNUITY_CREDIT_RATIO",
+    ]
     return (accepted_features_e2,)
 
 
 @app.cell
 def _(EMPLOYMENT_HISTORY_BUNDLE, accepted_features_e2):
-    employment_candidate_features = (
-        accepted_features_e2
-        + EMPLOYMENT_HISTORY_BUNDLE
-    )
-    return
+    employment_candidate_features = accepted_features_e2 + EMPLOYMENT_HISTORY_BUNDLE
 
 
 @app.cell
@@ -2401,8 +2271,9 @@ def _():
 
 @app.cell
 def _(financial_vs_employment):
-    print(f'Mean delta AP for EMPLOYMENT_HISTORY_BUNDLE: {financial_vs_employment["delta_ap"].mean():.6f}')
-    return
+    print(
+        f"Mean delta AP for EMPLOYMENT_HISTORY_BUNDLE: {financial_vs_employment['delta_ap'].mean():.6f}"
+    )
 
 
 @app.cell(hide_code=True)
@@ -2439,7 +2310,6 @@ def _(mo):
     The accepted application-level feature set remains E2:
     the raw cleaned application features plus the financial-ratio bundle.
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -2512,13 +2382,11 @@ def _(mo):
 
     Accept the bundle only if the improvement is reproducible across folds and is not driven by a single favorable validation fold.
     """)
-    return
 
 
 @app.cell
 def _(modeling_df):
     modeling_df["CNT_FAM_MEMBERS"].describe()
-    return
 
 
 @app.cell
@@ -2530,20 +2398,24 @@ def _(modeling_df):
         "CHILDREN_RATIO",
     ]
 
-    modeling_df['INCOME_PER_PERSON'] = modeling_df['AMT_INCOME_TOTAL'] / modeling_df['CNT_FAM_MEMBERS']
-    modeling_df['CREDIT_PER_PERSON'] = modeling_df['AMT_CREDIT'] / modeling_df['CNT_FAM_MEMBERS']
-    modeling_df['ANNUITY_PER_PERSON'] = modeling_df['AMT_ANNUITY'] / modeling_df['CNT_FAM_MEMBERS']
-    modeling_df['CHILDREN_RATIO'] = modeling_df['CNT_CHILDREN'] / modeling_df['CNT_FAM_MEMBERS']
+    modeling_df["INCOME_PER_PERSON"] = (
+        modeling_df["AMT_INCOME_TOTAL"] / modeling_df["CNT_FAM_MEMBERS"]
+    )
+    modeling_df["CREDIT_PER_PERSON"] = (
+        modeling_df["AMT_CREDIT"] / modeling_df["CNT_FAM_MEMBERS"]
+    )
+    modeling_df["ANNUITY_PER_PERSON"] = (
+        modeling_df["AMT_ANNUITY"] / modeling_df["CNT_FAM_MEMBERS"]
+    )
+    modeling_df["CHILDREN_RATIO"] = (
+        modeling_df["CNT_CHILDREN"] / modeling_df["CNT_FAM_MEMBERS"]
+    )
     return (HOUSEHOLD_AFFORDABILITY_BUNDLE,)
 
 
 @app.cell
 def _(ACCEPTED_FEATURES, HOUSEHOLD_AFFORDABILITY_BUNDLE):
-    e4_features = (
-        ACCEPTED_FEATURES
-        + HOUSEHOLD_AFFORDABILITY_BUNDLE
-    )
-    return
+    e4_features = ACCEPTED_FEATURES + HOUSEHOLD_AFFORDABILITY_BUNDLE
 
 
 @app.cell
@@ -2563,8 +2435,7 @@ def _():
 def _(pd):
     financial_result = pd.read_parquet(
         "mlartifacts\\1\\af2dae5dcf82445d983b6fc175cf24ec\\artifacts\\metrics\\fold_metrics.parquet"
-        )
-    return
+    )
 
 
 @app.cell
@@ -2626,7 +2497,6 @@ def _(mo):
     The accepted reference remains E2: raw cleaned application features plus the
     financial-ratio bundle.
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -2698,30 +2568,27 @@ def _(mo):
 
     Accept the bundle only if it provides a reproducible improvement across folds and the gain is not offset by degradation in the Top-10% review policy metrics.
     """)
-    return
 
 
 @app.cell
 def _(modeling_df):
-    GOODS_BUNDLE = [
-        "CREDIT_GOODS_RATIO",
-        "CREDIT_GOODS_DIFF",
-        "ANNUITY_GOODS_RATIO"
-    ]
+    GOODS_BUNDLE = ["CREDIT_GOODS_RATIO", "CREDIT_GOODS_DIFF", "ANNUITY_GOODS_RATIO"]
 
-    modeling_df['CREDIT_GOODS_RATIO'] = modeling_df['AMT_CREDIT'] / modeling_df['AMT_GOODS_PRICE']
-    modeling_df['CREDIT_GOODS_DIFF'] = modeling_df['AMT_CREDIT'] - modeling_df['AMT_GOODS_PRICE']
-    modeling_df['ANNUITY_GOODS_RATIO'] = modeling_df['AMT_ANNUITY'] / modeling_df['AMT_GOODS_PRICE']
+    modeling_df["CREDIT_GOODS_RATIO"] = (
+        modeling_df["AMT_CREDIT"] / modeling_df["AMT_GOODS_PRICE"]
+    )
+    modeling_df["CREDIT_GOODS_DIFF"] = (
+        modeling_df["AMT_CREDIT"] - modeling_df["AMT_GOODS_PRICE"]
+    )
+    modeling_df["ANNUITY_GOODS_RATIO"] = (
+        modeling_df["AMT_ANNUITY"] / modeling_df["AMT_GOODS_PRICE"]
+    )
     return (GOODS_BUNDLE,)
 
 
 @app.cell
 def _(ACCEPTED_FEATURES, GOODS_BUNDLE):
-    e5_features = (
-        ACCEPTED_FEATURES
-        + GOODS_BUNDLE
-    )
-    return
+    e5_features = ACCEPTED_FEATURES + GOODS_BUNDLE
 
 
 @app.cell
@@ -2791,7 +2658,6 @@ def _(mo):
 
     The accepted reference remains E2: raw cleaned application features plus the financial-ratio bundle.
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -2860,28 +2726,22 @@ def _(mo):
 
     Accept the bundle only if it provides a reproducible improvement across folds and the gain is not offset by degradation in the Top-10% review policy metrics.
     """)
-    return
 
 
 @app.cell
 def _(baseline_features, categorical_features, modeling_df):
     numeric_baseline_features = [
-        col for col in baseline_features
-        if col not in categorical_features
+        col for col in baseline_features if col not in categorical_features
     ]
 
     categorical_baseline_features = categorical_features
 
     modeling_df["NUMERIC_MISSING_COUNT"] = (
-        modeling_df[numeric_baseline_features]
-        .isna()
-        .sum(axis=1)
+        modeling_df[numeric_baseline_features].isna().sum(axis=1)
     )
 
     modeling_df["CATEGORICAL_MISSING_COUNT"] = (
-        modeling_df[categorical_baseline_features]
-        .eq("__MISSING__")
-        .sum(axis=1)
+        modeling_df[categorical_baseline_features].eq("__MISSING__").sum(axis=1)
     )
 
     MISSINGNESS_BUNDLE = [
@@ -2893,11 +2753,7 @@ def _(baseline_features, categorical_features, modeling_df):
 
 @app.cell
 def _(ACCEPTED_FEATURES, MISSINGNESS_BUNDLE):
-    e6_features = (
-        ACCEPTED_FEATURES
-        + MISSINGNESS_BUNDLE
-    )
-    return
+    e6_features = ACCEPTED_FEATURES + MISSINGNESS_BUNDLE
 
 
 @app.cell
@@ -2969,7 +2825,6 @@ def _(mo):
 
     The accepted reference remains **E2: raw cleaned application features plus the financial-ratio bundle**.
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -3058,7 +2913,6 @@ def _(mo):
 
     Accept the bundle only if it produces a reproducible improvement across folds and does not degrade the Top-10% review-policy metrics.
     """)
-    return
 
 
 @app.cell
@@ -3075,27 +2929,21 @@ def _(modeling_df):
         "AMT_REQ_CREDIT_BUREAU_YEAR",
     ]
 
-    modeling_df["BUREAU_REQUESTS_RECENT"] = (
-        modeling_df[BUREAU_REQUEST_RECENT]
-        .sum(axis=1, min_count=1)
+    modeling_df["BUREAU_REQUESTS_RECENT"] = modeling_df[BUREAU_REQUEST_RECENT].sum(
+        axis=1, min_count=1
     )
 
-    modeling_df["BUREAU_REQUESTS_LONG_TERM"] = (
-        modeling_df[BUREAU_REQUEST_LONG]
-        .sum(axis=1, min_count=1)
+    modeling_df["BUREAU_REQUESTS_LONG_TERM"] = modeling_df[BUREAU_REQUEST_LONG].sum(
+        axis=1, min_count=1
     )
 
-    modeling_df["BUREAU_REQUESTS_TOTAL"] = (
-        modeling_df[
-            BUREAU_REQUEST_RECENT + BUREAU_REQUEST_LONG
-        ]
-        .sum(axis=1, min_count=1)
-    )
+    modeling_df["BUREAU_REQUESTS_TOTAL"] = modeling_df[
+        BUREAU_REQUEST_RECENT + BUREAU_REQUEST_LONG
+    ].sum(axis=1, min_count=1)
 
     modeling_df["HAS_RECENT_BUREAU_REQUEST"] = (
         modeling_df["BUREAU_REQUESTS_RECENT"] > 0
     ).astype("int8")
-    return
 
 
 @app.cell
@@ -3107,11 +2955,7 @@ def _(ACCEPTED_FEATURES):
         "HAS_RECENT_BUREAU_REQUEST",
     ]
 
-    request_features = (
-        ACCEPTED_FEATURES
-        + BUREAU_REQUEST_BUNDLE
-    )
-    return
+    request_features = ACCEPTED_FEATURES + BUREAU_REQUEST_BUNDLE
 
 
 @app.cell
@@ -3208,7 +3052,6 @@ def _(mo):
 
     **Next step: multi-table feature engineering.**
     """)
-    return
 
 
 @app.cell
@@ -3239,7 +3082,6 @@ def _(mo):
     + CatBoost GPU
     + border_count=254
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -3301,7 +3143,6 @@ def _(mo):
 
     Accept the bundle only if the gain is reproducible across folds and is supported by the OOF and Top-10% policy metrics.
     """)
-    return
 
 
 @app.cell
@@ -3320,10 +3161,7 @@ def _(ACCEPTED_FEATURES):
         "BUREAU_ACTIVE_SHARE",
     ]
 
-    b1_features = (
-        ACCEPTED_FEATURES
-        + BUREAU_BASIC_FEATURES
-    )
+    b1_features = ACCEPTED_FEATURES + BUREAU_BASIC_FEATURES
     return (BUREAU_BASIC_FEATURES,)
 
 
@@ -3426,15 +3264,11 @@ def _(mo):
 
     B1 becomes the new GPU reference for subsequent bureau feature experiments.
     """)
-    return
 
 
 @app.cell
 def _(ACCEPTED_FEATURES, BUREAU_BASIC_FEATURES):
-    ACCEPTED_FEATURES_V1 = (
-        ACCEPTED_FEATURES
-        + BUREAU_BASIC_FEATURES
-    )
+    ACCEPTED_FEATURES_V1 = ACCEPTED_FEATURES + BUREAU_BASIC_FEATURES
     return (ACCEPTED_FEATURES_V1,)
 
 
@@ -3558,7 +3392,6 @@ def _(mo):
     If the improvement is absent or unstable, the recency bundle will be rejected
     without creating additional arbitrary time windows.
     """)
-    return
 
 
 @app.cell
@@ -3577,10 +3410,7 @@ def _(ACCEPTED_FEATURES_V1):
         "BUREAU_CREDITS_LAST_730D",
     ]
 
-    b2_features = (
-        BUREAU_RECENCY_FEATURES +
-        ACCEPTED_FEATURES_V1
-    )
+    b2_features = BUREAU_RECENCY_FEATURES + ACCEPTED_FEATURES_V1
     return (BUREAU_RECENCY_FEATURES,)
 
 
@@ -3640,15 +3470,11 @@ def _(mo):
     gain observed on fold 4 (+0.00380). The effect is therefore useful
     but not strong and shows noticeable variation across folds.
     """)
-    return
 
 
 @app.cell
 def _(ACCEPTED_FEATURES_V1, BUREAU_RECENCY_FEATURES):
-    ACCEPTED_FEATURES_V2 = (
-        ACCEPTED_FEATURES_V1
-        + BUREAU_RECENCY_FEATURES
-    )
+    ACCEPTED_FEATURES_V2 = ACCEPTED_FEATURES_V1 + BUREAU_RECENCY_FEATURES
     return (ACCEPTED_FEATURES_V2,)
 
 
@@ -3774,7 +3600,6 @@ def _(mo):
     If the improvement is absent or unstable, reject B3 and do not further expand
     the bureau financial feature group at this stage.
     """)
-    return
 
 
 @app.cell
@@ -3785,13 +3610,10 @@ def _(ACCEPTED_FEATURES_V2):
         "BUREAU_TOTAL_CREDIT_LIMIT",
         "BUREAU_MEAN_CREDIT_SUM",
         "BUREAU_TOTAL_CREDIT_DEBT",
-        "BUREAU_TOTAL_CREDIT_OVERDUE"
+        "BUREAU_TOTAL_CREDIT_OVERDUE",
     ]
 
-    b3_features = (
-        BUREAU_CREDIT +
-        ACCEPTED_FEATURES_V2
-    )
+    b3_features = BUREAU_CREDIT + ACCEPTED_FEATURES_V2
     return (BUREAU_CREDIT,)
 
 
@@ -3856,15 +3678,11 @@ def _(mo):
     The average improvement is small (+0.00403 AP), with the largest
     gain observed on fold 1 (+0.00573).
     """)
-    return
 
 
 @app.cell
 def _(ACCEPTED_FEATURES_V2, BUREAU_CREDIT):
-    ACCEPTED_FEATURES_V3 = (
-        ACCEPTED_FEATURES_V2 +
-        BUREAU_CREDIT
-    )
+    ACCEPTED_FEATURES_V3 = ACCEPTED_FEATURES_V2 + BUREAU_CREDIT
     return (ACCEPTED_FEATURES_V3,)
 
 
@@ -4001,7 +3819,6 @@ def _(mo):
     If B4 produces little or unstable improvement, reject the bundle and consider the
     `bureau` table sufficiently explored at this stage.
     """)
-    return
 
 
 @app.cell
@@ -4018,13 +3835,10 @@ def _(ACCEPTED_FEATURES_V3):
         "MAX_CREDIT_DAY_OVERDUE",
         "MAX_CREDIT_OVERDUE_AMT",
         "TOTAL_ACTIVE_CREDIT_OVERDUE",
-        "OVERDUE_CREDIT_SHARE"
+        "OVERDUE_CREDIT_SHARE",
     ]
 
-    b4_features = (
-        STRESS_FEATURES +
-        ACCEPTED_FEATURES_V3
-    )
+    b4_features = STRESS_FEATURES + ACCEPTED_FEATURES_V3
     return (STRESS_FEATURES,)
 
 
@@ -4109,15 +3923,11 @@ def _(mo):
     The accepted `bureau` feature set will be used as the reference when moving to
     the next historical table.
     """)
-    return
 
 
 @app.cell
 def _(ACCEPTED_FEATURES_V3, STRESS_FEATURES):
-    ACCEPTED_FEATURES_V4 = (
-        STRESS_FEATURES +
-        ACCEPTED_FEATURES_V3
-    )
+    ACCEPTED_FEATURES_V4 = STRESS_FEATURES + ACCEPTED_FEATURES_V3
     return (ACCEPTED_FEATURES_V4,)
 
 
@@ -4269,7 +4079,6 @@ def _(mo):
     If the improvement is weak or unstable, reject the bundle and move to the next
     feature group.
     """)
-    return
 
 
 @app.cell
@@ -4288,12 +4097,9 @@ def _(ACCEPTED_FEATURES_V4):
         "PREV_APP_UNUSED_COUNT",
         "PREV_APP_APPROVAL_RATE",
         "PREV_APP_REFUSAL_RATE",
-        "PREV_APP_DAYS_SINCE_LAST"
+        "PREV_APP_DAYS_SINCE_LAST",
     ]
-    p1_features = (
-        APPLICATION_HISTORY +
-        ACCEPTED_FEATURES_V4
-    )
+    p1_features = APPLICATION_HISTORY + ACCEPTED_FEATURES_V4
     return APPLICATION_HISTORY, p1_features
 
 
@@ -4325,7 +4131,6 @@ def _():
     #         validate="one_to_one",
     #     )
     # )
-
 
     # bureau_b4_vs_pre_apps_1["delta_ap"] = (
     #     bureau_b4_vs_pre_apps_1["pre_apps_1_ap"]
@@ -4374,7 +4179,6 @@ def _(mo):
     whether the amounts and credit structure of historical applications provide
     additional predictive signal.
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -4555,7 +4359,6 @@ def _(mo):
     KEEP — P2 provides additional predictive signal, with a positive mean
     validation AP delta across the five folds.
     """)
-    return
 
 
 @app.cell
@@ -4564,46 +4367,35 @@ def _():
         "TOTAL_AMT_PREV_APPLICATION",
         "MEAN_AMT_PREV_APPLICATION",
         "MAX_AMT_PREV_APPLICATION",
-
         "TOTAL_AMT_PREV_CREDIT",
         "MEAN_AMT_PREV_CREDIT",
         "MAX_AMT_PREV_CREDIT",
-
         "TOTAL_AMT_PREV_GOODS_PRICE",
         "MEAN_AMT_PREV_GOODS_PRICE",
         "MAX_AMT_PREV_GOODS_PRICE",
-
         "TOTAL_AMT_PREV_ANNUITY",
         "MEAN_AMT_PREV_ANNUITY",
         "MAX_AMT_PREV_ANNUITY",
-
         "TOTAL_AMT_PREV_DOWN_PAYMENT",
         "MEAN_AMT_PREV_DOWN_PAYMENT",
         "MAX_AMT_PREV_DOWN_PAYMENT",
-
         "TOTAL_CNT_PREV_PAYMENT",
         "MEAN_CNT_PREV_PAYMENT",
         "MAX_CNT_PREV_PAYMENT",
-
         "TOTAL_CREDIT_APPLICATION_DIFF",
         "MEAN_CREDIT_APPLICATION_DIFF",
         "MAX_CREDIT_APPLICATION_DIFF",
         "MIN_CREDIT_APPLICATION_DIFF",
-
         "MEAN_CREDIT_APPLICATION_RATIO",
         "MAX_CREDIT_APPLICATION_RATIO",
-        "MIN_CREDIT_APPLICATION_RATIO"
+        "MIN_CREDIT_APPLICATION_RATIO",
     ]
     return (FINANCIAL_HISTORY_FEATURES,)
 
 
 @app.cell
 def _(FINANCIAL_HISTORY_FEATURES, p1_features):
-    p2_features = (
-        FINANCIAL_HISTORY_FEATURES +
-        p1_features
-    )
-    return
+    p2_features = FINANCIAL_HISTORY_FEATURES + p1_features
 
 
 @app.cell
@@ -4640,7 +4432,6 @@ def _():
     #         validate="one_to_one",
     #     )
     # )
-
 
     # pre_apps_1_vs_pre_apps_2["delta_ap"] = (
     #     pre_apps_1_vs_pre_apps_2["pre_app_2_ap"]
@@ -4680,22 +4471,19 @@ def _(mo):
     re-evaluated later after additional historical tables and feature groups are
     added.
     """)
-    return
 
 
 @app.cell
 def _(ACCEPTED_FEATURES_V4, FINANCIAL_HISTORY_FEATURES):
-    ACCEPTED_FEATURES_V5 = (
-        ACCEPTED_FEATURES_V4 +
-        FINANCIAL_HISTORY_FEATURES
-    )
+    ACCEPTED_FEATURES_V5 = ACCEPTED_FEATURES_V4 + FINANCIAL_HISTORY_FEATURES
     return (ACCEPTED_FEATURES_V5,)
 
 
 @app.cell
 def _(pd):
-    pre_app_2_result = pd.read_parquet("mlartifacts\\1\\bd5675646f8145f8b895ac9246a4e4db\\artifacts\\metrics\\fold_metrics.parquet")
-    return
+    pre_app_2_result = pd.read_parquet(
+        "mlartifacts\\1\\bd5675646f8145f8b895ac9246a4e4db\\artifacts\\metrics\\fold_metrics.parquet"
+    )
 
 
 @app.cell(hide_code=True)
@@ -4855,7 +4643,6 @@ def _(mo):
     A small improvement in mean fold AP alone is not sufficient if the effect is
     unstable or accompanied by degradation in the main policy metrics.
     """)
-    return
 
 
 @app.cell
@@ -4869,14 +4656,10 @@ def _(ACCEPTED_FEATURES_V5):
         "MODE_NAME_CASH_LOAN_PURPOSE",
         "MODE_NAME_PORTFOLIO",
         "MODE_CHANNEL_TYPE",
-        "MODE_NAME_TYPE_SUITE"
+        "MODE_NAME_TYPE_SUITE",
     ]
 
-    p3_features = (
-        ACCEPTED_FEATURES_V5 +
-        CATEGORICAL_HISTORY_FEATURES
-    )
-    return
+    p3_features = ACCEPTED_FEATURES_V5 + CATEGORICAL_HISTORY_FEATURES
 
 
 @app.cell
@@ -4925,7 +4708,6 @@ def _():
     #         validate="one_to_one",
     #     )
     # )
-
 
     # pre_apps_2_vs_pre_apps_3["delta_ap"] = (
     #     pre_apps_2_vs_pre_apps_3["pre_app_3_ap"]
@@ -4989,7 +4771,6 @@ def _(mo):
     The accepted reference remains **P2: previous application outcome history +
     financial history**.
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -5242,7 +5023,6 @@ def _(mo):
 
     The bundle should not be accepted based solely on one unusually strong fold.
     """)
-    return
 
 
 @app.cell
@@ -5257,21 +5037,15 @@ def _(ACCEPTED_FEATURES_V5):
         "PREV_DAYS_SINCE_LAST_DECISION",
         "PREV_HISTORY_AGE_DAYS",
         "PREV_MEAN_DAYS_SINCE_DECISION",
-
         "MEAN_PREV_PLANNED_DURATION_DAYS",
         "MAX_PREV_PLANNED_DURATION_DAYS",
-
         "PREV_FUTURE_PLANNED_END_COUNT",
         "PREV_FUTURE_PLANNED_END_SHARE",
         "MAX_PREV_PLANNED_DAYS_REMAINING",
-
         "PREV_DAYS_SINCE_LAST_TERMINATION",
     ]
 
-    p4_features = (
-        ACCEPTED_FEATURES_V5 +
-        TEMPORAL_HISTORY_FEATURES
-    )
+    p4_features = ACCEPTED_FEATURES_V5 + TEMPORAL_HISTORY_FEATURES
     return (TEMPORAL_HISTORY_FEATURES,)
 
 
@@ -5303,8 +5077,6 @@ def _():
     #         validate="one_to_one",
     #     )
     # )
-
-
 
     # pre_apps_2_vs_pre_apps_4["delta_ap"] = (
     #     pre_apps_2_vs_pre_apps_4["pre_app_4_ap"]
@@ -5349,15 +5121,11 @@ def _(mo):
 
     P4 is therefore added to the accepted feature set.
     """)
-    return
 
 
 @app.cell
 def _(ACCEPTED_FEATURES_V5, TEMPORAL_HISTORY_FEATURES):
-    ACCEPTED_FEATURES_V6 = (
-        ACCEPTED_FEATURES_V5 +
-        TEMPORAL_HISTORY_FEATURES
-    )
+    ACCEPTED_FEATURES_V6 = ACCEPTED_FEATURES_V5 + TEMPORAL_HISTORY_FEATURES
     return (ACCEPTED_FEATURES_V6,)
 
 
@@ -5567,7 +5335,6 @@ def _(mo):
     improvement in validation AP without materially degrading OOF ranking quality or
     the Top-10% review-policy metrics.
     """)
-    return
 
 
 @app.cell
@@ -5581,10 +5348,7 @@ def _(ACCEPTED_FEATURES_V6):
         "CC_DRAWING_MONTH_SHARE",
     ]
 
-    сс1_features = (
-        ACCEPTED_FEATURES_V6 +
-        CC1_FEATURES
-    )
+    сс1_features = ACCEPTED_FEATURES_V6 + CC1_FEATURES
     return (CC1_FEATURES,)
 
 
@@ -5622,8 +5386,6 @@ def _():
     #         validate="one_to_one",
     #     )
     # )
-
-
 
     # pre_apps_4_vs_cc1["delta_ap"] = (
     #     pre_apps_4_vs_cc1["cc1_ap"]
@@ -5665,15 +5427,11 @@ def _(mo):
 
     CC1 is therefore added to the accepted feature set.
     """)
-    return
 
 
 @app.cell
 def _(ACCEPTED_FEATURES_V6, CC1_FEATURES):
-    ACCEPTED_FEATURES_V7 = (
-        ACCEPTED_FEATURES_V6 +
-        CC1_FEATURES
-    )
+    ACCEPTED_FEATURES_V7 = ACCEPTED_FEATURES_V6 + CC1_FEATURES
     return (ACCEPTED_FEATURES_V7,)
 
 
@@ -5908,7 +5666,6 @@ def _(mo):
     A strong gain on only one fold is not sufficient; the improvement should be
     reasonably consistent across the fixed validation folds.
     """)
-    return
 
 
 @app.cell
@@ -5917,20 +5674,15 @@ def _(ACCEPTED_FEATURES_V7):
         "CC_MEAN_BALANCE",
         "CC_MAX_BALANCE",
         "CC_LATEST_BALANCE",
-
         "CC_MEAN_CREDIT_LIMIT",
         "CC_MAX_CREDIT_LIMIT",
         "CC_LATEST_CREDIT_LIMIT",
-
         "CC_MEAN_UTILIZATION",
         "CC_MAX_UTILIZATION",
         "CC_LATEST_UTILIZATION",
     ]
 
-    cc2_features = (
-        ACCEPTED_FEATURES_V7 +
-        CC2_FEATURES
-    )
+    cc2_features = ACCEPTED_FEATURES_V7 + CC2_FEATURES
     return (CC2_FEATURES,)
 
 
@@ -5959,16 +5711,13 @@ def compare_fold_results(df1, df2, col1, col2):
         df1[["fold", col1]]
         .rename(columns={col1: "df1_metric"})
         .merge(
-            df2[["fold", col2]]
-            .rename(columns={col2: "df2_metric"}),
+            df2[["fold", col2]].rename(columns={col2: "df2_metric"}),
             on="fold",
             validate="one_to_one",
         )
     )
 
-    comparison["delta"] = (
-        comparison["df2_metric"] - comparison["df1_metric"]
-    )
+    comparison["delta"] = comparison["df2_metric"] - comparison["df1_metric"]
 
     return comparison
 
@@ -6023,15 +5772,11 @@ def _(mo):
 
     CC2 is therefore added to the accepted feature set.
     """)
-    return
 
 
 @app.cell
 def _(ACCEPTED_FEATURES_V7, CC2_FEATURES):
-    ACCEPTED_FEATURES_V8 = (
-        ACCEPTED_FEATURES_V7 +
-        CC2_FEATURES
-    )
+    ACCEPTED_FEATURES_V8 = ACCEPTED_FEATURES_V7 + CC2_FEATURES
     return (ACCEPTED_FEATURES_V8,)
 
 
@@ -6308,7 +6053,6 @@ def _(mo):
     The bundle should improve validation AP in a reasonably consistent way and
     should not materially degrade OOF ROC-AUC or the Top-10% review-policy metrics.
     """)
-    return
 
 
 @app.cell
@@ -6317,28 +6061,19 @@ def _(ACCEPTED_FEATURES_V8):
         "CC_MEAN_DRAWINGS",
         "CC_MAX_DRAWINGS",
         "CC_LATEST_DRAWINGS",
-
         "CC_MEAN_ATM_DRAWINGS",
         "CC_MAX_ATM_DRAWINGS",
-
         "CC_MEAN_DRAWING_COUNT",
         "CC_MAX_DRAWING_COUNT",
-
         "CC_MEAN_PAYMENTS",
         "CC_MAX_PAYMENTS",
         "CC_LATEST_PAYMENTS",
-
         "CC_MEAN_NET_DRAWINGS",
         "CC_MAX_NET_DRAWINGS",
-
         "CC_MEAN_ATM_DRAWING_SHARE",
     ]
 
-    cc3_features = (
-        ACCEPTED_FEATURES_V8 +
-        CC3_FEATURES
-    )
-    return
+    cc3_features = ACCEPTED_FEATURES_V8 + CC3_FEATURES
 
 
 @app.cell
@@ -6406,7 +6141,6 @@ def _(mo):
     Rather, the current aggregated representation does not provide enough
     incremental value to retain the full bundle.
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -6695,7 +6429,6 @@ def _(mo):
     table will be considered complete after this experiment regardless of whether
     the bundle is accepted or rejected.
     """)
-    return
 
 
 @app.cell
@@ -6710,23 +6443,16 @@ def _(ACCEPTED_FEATURES_V8):
         "CC_MAX_DPD",
         "CC_MEAN_DPD",
         "CC_DPD_MONTH_SHARE",
-
         "CC_MAX_DPD_DEF",
         "CC_DPD_DEF_MONTH_SHARE",
-
         "CC_DPD_30_PLUS_MONTH_SHARE",
         "CC_DPD_90_PLUS_MONTH_SHARE",
-
         "CC_RECENT_6M_MAX_DPD",
         "CC_RECENT_6M_DPD_MONTH_SHARE",
-
         "CC_LATEST_MAX_DPD",
     ]
 
-    cc4_features = (
-        ACCEPTED_FEATURES_V8 +
-        CC4_FEATURES
-    )
+    cc4_features = ACCEPTED_FEATURES_V8 + CC4_FEATURES
     return (CC4_FEATURES,)
 
 
@@ -6794,22 +6520,19 @@ def _(mo):
 
     CC4 is retained in the accepted feature set.
     """)
-    return
 
 
 @app.cell
 def _(ACCEPTED_FEATURES_V8, CC4_FEATURES):
-    ACCEPTED_FEATURES_V9 = (
-        ACCEPTED_FEATURES_V8 +
-        CC4_FEATURES
-    )
+    ACCEPTED_FEATURES_V9 = ACCEPTED_FEATURES_V8 + CC4_FEATURES
     return (ACCEPTED_FEATURES_V9,)
 
 
 @app.cell
 def _(pd):
-    cc4_run_results = pd.read_parquet("mlartifacts\\1\\da8be09a5e7341ed95dece14f3c151c8\\artifacts\\metrics\\fold_metrics.parquet")
-    return
+    cc4_run_results = pd.read_parquet(
+        "mlartifacts\\1\\da8be09a5e7341ed95dece14f3c151c8\\artifacts\\metrics\\fold_metrics.parquet"
+    )
 
 
 @app.cell(hide_code=True)
@@ -7024,7 +6747,6 @@ def _(mo):
     Because IP1 contains only simple history-structure features, even a modest but
     consistent improvement may justify retaining the bundle.
     """)
-    return
 
 
 @app.cell
@@ -7037,10 +6759,7 @@ def _(ACCEPTED_FEATURES_V9):
         "IP_DAYS_SINCE_LAST_PAYMENT",
     ]
 
-    ip1_features = (
-        ACCEPTED_FEATURES_V9 +
-        IP1_FEATURES
-    )
+    ip1_features = ACCEPTED_FEATURES_V9 + IP1_FEATURES
     return (IP1_FEATURES,)
 
 
@@ -7099,15 +6818,11 @@ def _(mo):
 
     IP1 is therefore added to the accepted feature set.
     """)
-    return
 
 
 @app.cell
 def _(ACCEPTED_FEATURES_V9, IP1_FEATURES):
-    ACCEPTED_FEATURES_V10 = (
-        ACCEPTED_FEATURES_V9 +
-        IP1_FEATURES
-    )
+    ACCEPTED_FEATURES_V10 = ACCEPTED_FEATURES_V9 + IP1_FEATURES
     return (ACCEPTED_FEATURES_V10,)
 
 
@@ -7399,7 +7114,6 @@ def _(mo):
     should not materially degrade OOF ranking quality or the Top-10% review-policy
     metrics.
     """)
-    return
 
 
 @app.cell
@@ -7415,19 +7129,14 @@ def _(ACCEPTED_FEATURES_V10):
         "IP_MEAN_DELAY_DAYS",
         "IP_MAX_DELAY_DAYS",
         "IP_30_PLUS_LATE_SHARE",
-
         "IP_UNDERPAID_INSTALLMENT_SHARE",
         "IP_MEAN_PAYMENT_SHORTFALL",
         "IP_MAX_PAYMENT_SHORTFALL",
-
         "IP_MEAN_PAYMENT_COVERAGE_RATIO",
         "IP_MIN_PAYMENT_COVERAGE_RATIO",
     ]
 
-    ip2_features = (
-        ACCEPTED_FEATURES_V10 +
-        IP2_FEATURES
-    )
+    ip2_features = ACCEPTED_FEATURES_V10 + IP2_FEATURES
     return (IP2_FEATURES,)
 
 
@@ -7490,15 +7199,11 @@ def _(mo):
 
     IP2 is therefore added to the accepted feature set.
     """)
-    return
 
 
 @app.cell
 def _(ACCEPTED_FEATURES_V10, IP2_FEATURES):
-    ACCEPTED_FEATURES_V11 = (
-        ACCEPTED_FEATURES_V10 +
-        IP2_FEATURES
-    )
+    ACCEPTED_FEATURES_V11 = ACCEPTED_FEATURES_V10 + IP2_FEATURES
     return (ACCEPTED_FEATURES_V11,)
 
 
@@ -7725,7 +7430,6 @@ def _(mo):
     the table will be considered complete after this experiment regardless of
     whether IP3 is accepted or rejected.
     """)
-    return
 
 
 @app.cell
@@ -7736,7 +7440,6 @@ def _(ACCEPTED_FEATURES_V11):
         "IP_RECENT_6M_30_PLUS_LATE_SHARE",
         "IP_RECENT_6M_MAX_DELAY_DAYS",
         "IP_RECENT_6M_UNDERPAID_SHARE",
-
         "IP_RECENT_12M_INSTALLMENT_COUNT",
         "IP_RECENT_12M_LATE_SHARE",
         "IP_RECENT_12M_30_PLUS_LATE_SHARE",
@@ -7744,10 +7447,7 @@ def _(ACCEPTED_FEATURES_V11):
         "IP_RECENT_12M_UNDERPAID_SHARE",
     ]
 
-    ip3_features = (
-        ACCEPTED_FEATURES_V11 +
-        IP3_FEATURES
-    )
+    ip3_features = ACCEPTED_FEATURES_V11 + IP3_FEATURES
     return (IP3_FEATURES,)
 
 
@@ -7810,15 +7510,11 @@ def _(mo):
 
     IP3 is therefore added to the accepted feature set.
     """)
-    return
 
 
 @app.cell
 def _(ACCEPTED_FEATURES_V11, IP3_FEATURES):
-    ACCEPTED_FEATURES_V12 = (
-        ACCEPTED_FEATURES_V11 +
-        IP3_FEATURES
-    )
+    ACCEPTED_FEATURES_V12 = ACCEPTED_FEATURES_V11 + IP3_FEATURES
     return (ACCEPTED_FEATURES_V12,)
 
 
@@ -8118,7 +7814,6 @@ def _(mo):
     Because POS1 contains mostly structural and contract-state features, even a
     moderate but consistent improvement may justify retaining the bundle.
     """)
-    return
 
 
 @app.cell
@@ -8128,23 +7823,16 @@ def _(ACCEPTED_FEATURES_V12):
         "POS_MONTHS_OBSERVED",
         "POS_HISTORY_AGE_MONTHS",
         "POS_MONTHS_SINCE_LATEST",
-
         "POS_MEAN_INSTALMENT_COUNT",
         "POS_MAX_INSTALMENT_COUNT",
-
         "POS_MEAN_INSTALMENTS_FUTURE",
         "POS_MEAN_COMPLETION_RATIO",
-
         "POS_LATEST_MEAN_INSTALMENTS_FUTURE",
         "POS_LATEST_MAX_INSTALMENTS_FUTURE",
         "POS_LATEST_MEAN_COMPLETION_RATIO",
     ]
 
-    pos1_features = (
-        ACCEPTED_FEATURES_V12 +
-        POS1_FEATURES
-    )
-    return
+    pos1_features = ACCEPTED_FEATURES_V12 + POS1_FEATURES
 
 
 @app.cell
@@ -8211,7 +7899,6 @@ def _(mo):
     progress are largely redundant with information already captured by the
     accepted historical feature groups.
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -8482,7 +8169,6 @@ def _(mo):
     will be considered complete after this experiment regardless of whether the
     bundle is accepted or rejected.
     """)
-    return
 
 
 @app.cell
@@ -8492,22 +8178,15 @@ def _(ACCEPTED_FEATURES_V12):
         "POS_MEAN_DPD",
         "POS_DPD_MONTH_SHARE",
         "POS_DPD_30_PLUS_MONTH_SHARE",
-
         "POS_MAX_DPD_DEF",
         "POS_DPD_DEF_MONTH_SHARE",
-
         "POS_RECENT_6M_MAX_DPD",
         "POS_RECENT_6M_DPD_MONTH_SHARE",
-
         "POS_LATEST_MAX_DPD",
         "POS_LATEST_MAX_DPD_DEF",
     ]
 
-    pos2_features = (
-        ACCEPTED_FEATURES_V12 +
-        POS2_FEATURES
-    )
-    return
+    pos2_features = ACCEPTED_FEATURES_V12 + POS2_FEATURES
 
 
 @app.cell
@@ -8576,7 +8255,6 @@ def _(mo):
 
     `POS_CASH_balance` is considered complete after this experiment.
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -8909,7 +8587,6 @@ def _(mo):
     be considered complete after this experiment regardless of whether the bundle
     is accepted or rejected.
     """)
-    return
 
 
 @app.cell
@@ -8923,23 +8600,16 @@ def _(ACCEPTED_FEATURES_V12):
     BB1_FEATURES = [
         "BB_TOTAL_MONTHS_OBSERVED",
         "BB_MAX_HISTORY_AGE_MONTHS",
-
         "BB_MAX_STATUS_SEVERITY",
         "BB_MEAN_DPD_MONTH_SHARE",
         "BB_MAX_DPD_MONTH_SHARE",
         "BB_MEAN_SEVERE_DPD_MONTH_SHARE",
-
         "BB_MONTHS_SINCE_LAST_DPD",
-
         "BB_RECENT_12M_MAX_SEVERITY",
         "BB_RECENT_12M_MEAN_DPD_SHARE",
     ]
 
-    bb1_features = (
-        ACCEPTED_FEATURES_V12 +
-        BB1_FEATURES
-    )
-    return
+    bb1_features = ACCEPTED_FEATURES_V12 + BB1_FEATURES
 
 
 @app.cell
@@ -9006,7 +8676,6 @@ def _(mo):
     already accepted bureau, installment-payment and other historical feature
     groups.
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -9103,7 +8772,6 @@ def _(mo):
     If removal causes little or no degradation, the source may be largely redundant
     inside the final feature representation.
     """)
-    return
 
 
 @app.cell
@@ -9121,15 +8789,13 @@ def _(
     training_dataset,
 ):
     FULL_FEATURES = ACCEPTED_FEATURES_V12
-    FULL_CATEGORICAL_FEATURES = training_dataset[FULL_FEATURES].select_dtypes(
-        include=["category", "object"]
-    ).columns.to_list()
-
-    INSTALLMENTS_FEATURES = (
-        IP1_FEATURES
-        + IP2_FEATURES
-        + IP3_FEATURES
+    FULL_CATEGORICAL_FEATURES = (
+        training_dataset[FULL_FEATURES]
+        .select_dtypes(include=["category", "object"])
+        .columns.to_list()
     )
+
+    INSTALLMENTS_FEATURES = IP1_FEATURES + IP2_FEATURES + IP3_FEATURES
 
     A1_FEATURES = [
         feature
@@ -9138,9 +8804,11 @@ def _(
         and feature not in ["SK_ID_CURR", "TARGET", "partition", "fold"]
     ]
 
-    CATEGORICAL_FEATURES_A1 = training_dataset[A1_FEATURES].select_dtypes(
-        include=["category", "object"]
-    ).columns.to_list()
+    CATEGORICAL_FEATURES_A1 = (
+        training_dataset[A1_FEATURES]
+        .select_dtypes(include=["category", "object"])
+        .columns.to_list()
+    )
     return (
         A1_FEATURES,
         FULL_CATEGORICAL_FEATURES,
@@ -9156,13 +8824,13 @@ def _(A1_FEATURES, FULL_FEATURES, INSTALLMENTS_FEATURES):
     print("Removed:", len(FULL_FEATURES) - len(A1_FEATURES))
 
     set(INSTALLMENTS_FEATURES) & set(A1_FEATURES)
-    return
 
 
 @app.cell
 def _(pd):
-    multitable_accepted_results = pd.read_parquet("mlartifacts\\1\\38fcaf6e8670434e888f679ac2294ea3\\artifacts\\metrics\\fold_metrics.parquet")
-    return
+    multitable_accepted_results = pd.read_parquet(
+        "mlartifacts\\1\\38fcaf6e8670434e888f679ac2294ea3\\artifacts\\metrics\\fold_metrics.parquet"
+    )
 
 
 @app.cell
@@ -9216,7 +8884,6 @@ def _(mo):
 
     The source is therefore considered a core component of the final feature set.
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -9304,7 +8971,6 @@ def _(mo):
     incremental information that cannot be recovered from the other historical
     tables.
     """)
-    return
 
 
 @app.cell
@@ -9324,14 +8990,14 @@ def _(
     )
 
     A2_FEATURES = [
-        feature
-        for feature in FULL_FEATURES
-        if feature not in BUREAU_FEATURES
+        feature for feature in FULL_FEATURES if feature not in BUREAU_FEATURES
     ]
 
-    CATEGORICAL_FEATURES_A2 = training_dataset[A2_FEATURES].select_dtypes(
-        include=["category", "object"]
-    ).columns.to_list()
+    CATEGORICAL_FEATURES_A2 = (
+        training_dataset[A2_FEATURES]
+        .select_dtypes(include=["category", "object"])
+        .columns.to_list()
+    )
     return A2_FEATURES, BUREAU_FEATURES
 
 
@@ -9342,7 +9008,6 @@ def _(A2_FEATURES, BUREAU_FEATURES: list[str], FULL_FEATURES):
     print("Removed:", len(FULL_FEATURES) - len(A2_FEATURES))
 
     set(BUREAU_FEATURES) & set(A2_FEATURES)
-    return
 
 
 @app.cell
@@ -9393,7 +9058,6 @@ def _(mo):
     The bureau feature source is therefore retained as a core component of the
     final feature set.
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -9504,7 +9168,6 @@ def _(mo):
     The magnitude of the AP degradation can also be compared with the other
     source-level ablations to estimate the relative importance of each data source.
     """)
-    return
 
 
 @app.cell
@@ -9516,9 +9179,7 @@ def _(
     training_dataset,
 ):
     PREVIOUS_APPLICATION_FEATURES = (
-        APPLICATION_HISTORY
-        + FINANCIAL_HISTORY_FEATURES
-        + TEMPORAL_HISTORY_FEATURES
+        APPLICATION_HISTORY + FINANCIAL_HISTORY_FEATURES + TEMPORAL_HISTORY_FEATURES
     )
 
     A3_FEATURES = [
@@ -9527,16 +9188,17 @@ def _(
         if feature not in PREVIOUS_APPLICATION_FEATURES
     ]
 
-    CATEGORICAL_FEATURES_A3 = training_dataset[A3_FEATURES].select_dtypes(
-        include=["category", "object"]
-    ).columns.to_list()
+    CATEGORICAL_FEATURES_A3 = (
+        training_dataset[A3_FEATURES]
+        .select_dtypes(include=["category", "object"])
+        .columns.to_list()
+    )
 
     print("Full:", len(FULL_FEATURES))
     print("A3:", len(A3_FEATURES))
     print("Removed:", len(FULL_FEATURES) - len(A3_FEATURES))
 
     set(PREVIOUS_APPLICATION_FEATURES) & set(A3_FEATURES)
-    return
 
 
 @app.cell
@@ -9590,7 +9252,6 @@ def _(mo):
     `previous_application` is therefore retained as a core component of the final
     feature set.
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -9692,7 +9353,6 @@ def _(mo):
     credit-card activity, utilization and delinquency contain information that is
     not fully represented by the other historical sources.
     """)
-    return
 
 
 @app.cell
@@ -9703,28 +9363,23 @@ def _(
     FULL_FEATURES,
     training_dataset,
 ):
-    CREDIT_CARD_FEATURES = (
-        CC1_FEATURES
-        + CC2_FEATURES
-        + CC4_FEATURES
-    )
+    CREDIT_CARD_FEATURES = CC1_FEATURES + CC2_FEATURES + CC4_FEATURES
 
     A4_FEATURES = [
-        feature
-        for feature in FULL_FEATURES
-        if feature not in CREDIT_CARD_FEATURES
+        feature for feature in FULL_FEATURES if feature not in CREDIT_CARD_FEATURES
     ]
 
-    CATEGORICAL_FEATURES_A4 = training_dataset[A4_FEATURES].select_dtypes(
-        include=["category", "object"]
-    ).columns.to_list()
+    CATEGORICAL_FEATURES_A4 = (
+        training_dataset[A4_FEATURES]
+        .select_dtypes(include=["category", "object"])
+        .columns.to_list()
+    )
 
     print("Full:", len(FULL_FEATURES))
     print("A4:", len(A4_FEATURES))
     print("Removed:", len(FULL_FEATURES) - len(A4_FEATURES))
 
     set(CREDIT_CARD_FEATURES) & set(A4_FEATURES)
-    return
 
 
 @app.cell
@@ -9777,7 +9432,6 @@ def _(mo):
 
     The source is therefore retained in the final feature set.
     """)
-    return
 
 
 @app.cell
@@ -9824,26 +9478,25 @@ def _():
 
 @app.cell
 def _(pd):
-    shap_summary_full = pd.read_parquet("mlartifacts\\1\\c8f3496812314a84b7d04cd0eb495e38\\artifacts\\shap\\shap_summary.parquet")
+    shap_summary_full = pd.read_parquet(
+        "mlartifacts\\1\\c8f3496812314a84b7d04cd0eb495e38\\artifacts\\shap\\shap_summary.parquet"
+    )
     return (shap_summary_full,)
 
 
 @app.cell
 def _(shap_summary_full):
     print(len(shap_summary_full))
-    return
 
 
 @app.cell
 def _(shap_summary_full):
     shap_summary_full.head(10)
-    return
 
 
 @app.cell
 def _(shap_summary_full):
     shap_summary_full.tail(10)
-    return
 
 
 @app.cell
@@ -9855,7 +9508,6 @@ def _():
     #     .sort_values("mean_rank", ascending=False)
     #     .head(30)["feature"]
     #     .tolist()
-
 
     # rfe1_candidates = (
     #     shap_summary_full[
@@ -10054,28 +9706,22 @@ def _(mo):
     If performance is preserved, RFE1 becomes the new feature-selection reference
     and its SHAP ranking is used for the next recursive elimination round.
     """)
-    return
 
 
 @app.cell
 def _(FULL_CATEGORICAL_FEATURES, FULL_FEATURES, shap_summary_full):
     RFE1_TO_REMOVE = (
-        shap_summary_full
-        .sort_values("mean_rank", ascending=False)
+        shap_summary_full.sort_values("mean_rank", ascending=False)
         .head(30)["feature"]
         .tolist()
     )
 
     RFE1_FEATURES = [
-        feature
-        for feature in FULL_FEATURES
-        if feature not in RFE1_TO_REMOVE
+        feature for feature in FULL_FEATURES if feature not in RFE1_TO_REMOVE
     ]
 
     RFE1_CATEGORICAL_FEATURES = [
-        feature
-        for feature in FULL_CATEGORICAL_FEATURES
-        if feature in RFE1_FEATURES
+        feature for feature in FULL_CATEGORICAL_FEATURES if feature in RFE1_FEATURES
     ]
 
     print("FULL:", len(FULL_FEATURES))
@@ -10140,47 +9786,43 @@ def _(mo):
 
     RFE1 is accepted as the new feature-selection reference.
     """)
-    return
 
 
 @app.cell
 def _(pd):
-    rfe1_shap_summary = pd.read_parquet("mlartifacts\\1\\2eb0315f16f94d429ea9380f06574d80\\artifacts\\shap\\shap_summary.parquet")
+    rfe1_shap_summary = pd.read_parquet(
+        "mlartifacts\\1\\2eb0315f16f94d429ea9380f06574d80\\artifacts\\shap\\shap_summary.parquet"
+    )
     return (rfe1_shap_summary,)
 
 
 @app.cell
 def _(rfe1_shap_summary):
     RFE2_REMOVE = (
-        rfe1_shap_summary
-        .sort_values("mean_rank", ascending=False)
+        rfe1_shap_summary.sort_values("mean_rank", ascending=False)
         .head(26)["feature"]
         .tolist()
     )
 
-    rfe2_candidates = (
-        rfe1_shap_summary[
-            rfe1_shap_summary["feature"].isin(RFE2_REMOVE)
-        ]
-        .sort_values("mean_rank", ascending=False)
-    )
+    rfe2_candidates = rfe1_shap_summary[
+        rfe1_shap_summary["feature"].isin(RFE2_REMOVE)
+    ].sort_values("mean_rank", ascending=False)
     return RFE2_REMOVE, rfe2_candidates
 
 
 @app.cell
 def _(rfe2_candidates):
     rfe2_candidates[
-            [
-                "feature",
-                "mean_abs_shap",
-                "mean_normalized_shap",
-                "mean_rank",
-                "std_rank",
-                "best_rank",
-                "worst_rank",
-            ]
+        [
+            "feature",
+            "mean_abs_shap",
+            "mean_normalized_shap",
+            "mean_rank",
+            "std_rank",
+            "best_rank",
+            "worst_rank",
+        ]
     ]
-    return
 
 
 @app.cell(hide_code=True)
@@ -10199,21 +9841,14 @@ def _(mo):
     - Model: CatBoostClassifier (depth=6, iterations=5000, early_stopping_rounds=200, learning_rate=0.05, l2_leaf_reg=3.0, border_count=254, GPU baseline parameters);
     - Metrics: Primary: Validation Average Precision (mean paired ΔAP across 5 folds). Secondary: ROC-AUC, LogLoss, Recall@Top10%, Precision@Top10%.
     """)
-    return
 
 
 @app.cell
 def _(RFE1_CATEGORICAL_FEATURES, RFE1_FEATURES, RFE2_REMOVE):
-    RFE2_FEATURES = [
-        feature
-        for feature in RFE1_FEATURES
-        if feature not in RFE2_REMOVE
-    ]
+    RFE2_FEATURES = [feature for feature in RFE1_FEATURES if feature not in RFE2_REMOVE]
 
     RFE2_CATEGORICAL_FEATURES = [
-        feature
-        for feature in RFE1_CATEGORICAL_FEATURES
-        if feature in RFE2_FEATURES
+        feature for feature in RFE1_CATEGORICAL_FEATURES if feature in RFE2_FEATURES
     ]
 
     print("RFE1:", len(RFE1_FEATURES))
@@ -10266,7 +9901,6 @@ def _(mo):
     ### Decision
     **ACCEPT** — RFE2 (148 features) is accepted as the final feature representation for subsequent hyperparameter tuning and model exploration.
     """)
-    return
 
 
 @app.cell
@@ -10278,8 +9912,9 @@ def _(RFE2_CATEGORICAL_FEATURES, RFE2_FEATURES):
 
 @app.cell
 def _(pd):
-    rfe_result = pd.read_parquet("mlartifacts\\1\\2eb0315f16f94d429ea9380f06574d80\\artifacts\\metrics\\fold_metrics.parquet")
-    return
+    rfe_result = pd.read_parquet(
+        "mlartifacts\\1\\2eb0315f16f94d429ea9380f06574d80\\artifacts\\metrics\\fold_metrics.parquet"
+    )
 
 
 @app.cell(hide_code=True)
@@ -10303,7 +9938,6 @@ def _(mo):
       - `random_strength`: [1e-3, 10.0] (log scale)
     - Metrics: Primary: Validation Average Precision (mean across 5 folds). Secondary: ROC-AUC, LogLoss, Precision@Top10%, Recall@Top10%.
     """)
-    return
 
 
 @app.cell
@@ -10430,7 +10064,6 @@ def _(mo):
     ### Decision
     **ACCEPT** — Trial 29 is accepted as the tuned RFE2 CatBoost candidate (`T1_BEST_PARAMS`) for subsequent error analysis, dynamic feature testing, and ensemble modeling.
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -10455,7 +10088,6 @@ def _(mo):
       5. Numeric cohort scan across feature quintiles.
     - Holdout policy: Internal holdout remains untouched.
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -10467,13 +10099,16 @@ def _(mo):
     Compare out-of-fold probability distributions, rank movements, and Top-10% review-queue composition between the accepted RFE1 model and the final CatBoost candidate (Trial 29).
     Hypothesis: The transition from the RFE1 baseline to the final CatBoost candidate (Trial 29) improved global ranking metrics (AP and ROC-AUC) through combined feature-pruning and parameter tuning. Comparing out-of-fold distributions and review-queue overlap against RFE1 helps diagnose whether rank movements shifted high-risk applicants into the Top-10% queue.
     """)
-    return
 
 
 @app.cell
 def _(pd):
-    rfe1_oof = pd.read_parquet("mlartifacts\\1\\2eb0315f16f94d429ea9380f06574d80\\artifacts\\predictions\\oof_predictions.parquet")
-    t29_oof = pd.read_parquet("mlartifacts\\1\\5665cc4f67844ea79c909b9951c593c1\\artifacts\\predictions\\oof_predictions.parquet")
+    rfe1_oof = pd.read_parquet(
+        "mlartifacts\\1\\2eb0315f16f94d429ea9380f06574d80\\artifacts\\predictions\\oof_predictions.parquet"
+    )
+    t29_oof = pd.read_parquet(
+        "mlartifacts\\1\\5665cc4f67844ea79c909b9951c593c1\\artifacts\\predictions\\oof_predictions.parquet"
+    )
     return rfe1_oof, t29_oof
 
 
@@ -10484,7 +10119,6 @@ def _(rfe1_oof, t29_oof):
 
     print(rfe1_oof.columns.tolist())
     print(t29_oof.columns.tolist())
-    return
 
 
 @app.cell
@@ -10499,24 +10133,19 @@ def _(rfe1_oof, t29_oof):
 
     assert rfe1_oof["probability"].between(0, 1).all()
     assert t29_oof["probability"].between(0, 1).all()
-    return
 
 
 @app.cell
 def _(rfe1_oof, t29_oof):
     oof_analysis = (
-        rfe1_oof[
-            ["SK_ID_CURR", "TARGET", "fold", "probability"]
-        ]
+        rfe1_oof[["SK_ID_CURR", "TARGET", "fold", "probability"]]
         .rename(
             columns={
                 "probability": "pred_rfe1",
             }
         )
         .merge(
-            t29_oof[
-                ["SK_ID_CURR", "TARGET", "fold", "probability"]
-            ].rename(
+            t29_oof[["SK_ID_CURR", "TARGET", "fold", "probability"]].rename(
                 columns={
                     "TARGET": "TARGET_t29",
                     "fold": "fold_t29",
@@ -10532,100 +10161,79 @@ def _(rfe1_oof, t29_oof):
     assert (oof_analysis["TARGET"] == oof_analysis["TARGET_t29"]).all()
     assert (oof_analysis["fold"] == oof_analysis["fold_t29"]).all()
 
-    oof_analysis = oof_analysis.drop(
-        columns=["TARGET_t29", "fold_t29"]
-    )
+    oof_analysis = oof_analysis.drop(columns=["TARGET_t29", "fold_t29"])
     return (oof_analysis,)
 
 
 @app.cell
 def _(oof_analysis):
-    oof_analysis["pred_delta"] = (
-        oof_analysis["pred_t29"]
-        - oof_analysis["pred_rfe1"]
-    )
-    return
+    oof_analysis["pred_delta"] = oof_analysis["pred_t29"] - oof_analysis["pred_rfe1"]
 
 
 @app.cell
 def _(oof_analysis):
     oof_analysis
-    return
 
 
 @app.cell
 def _(oof_analysis):
     oof_analysis.sort_values("pred_delta", ascending=False).head(10)
-    return
 
 
 @app.cell
 def _(oof_analysis, spearmanr):
     print(
-        oof_analysis[
-            ["pred_rfe1", "pred_t29", "pred_delta"]
-        ].describe(
+        oof_analysis[["pred_rfe1", "pred_t29", "pred_delta"]].describe(
             percentiles=[0.01, 0.05, 0.25, 0.5, 0.75, 0.95, 0.99]
         )
     )
 
-    print(
-        "Pearson:",
-        oof_analysis["pred_rfe1"].corr(oof_analysis["pred_t29"])
-    )
+    print("Pearson:", oof_analysis["pred_rfe1"].corr(oof_analysis["pred_t29"]))
 
     print(
         "Spearman:",
         spearmanr(
             oof_analysis["pred_rfe1"],
             oof_analysis["pred_t29"],
-        ).statistic
+        ).statistic,
     )
 
-    oof_analysis["abs_pred_delta"] = (
-        oof_analysis["pred_delta"].abs()
-    )
+    oof_analysis["abs_pred_delta"] = oof_analysis["pred_delta"].abs()
 
     print(
         oof_analysis["abs_pred_delta"].describe(
             percentiles=[0.5, 0.9, 0.95, 0.99, 0.999]
         )
     )
-    return
 
 
 @app.cell
 def _(oof_analysis):
-    oof_analysis["rank_rfe1"] = (
-        oof_analysis["pred_rfe1"]
-        .rank(method="average", ascending=False)
+    oof_analysis["rank_rfe1"] = oof_analysis["pred_rfe1"].rank(
+        method="average", ascending=False
     )
 
-    oof_analysis["rank_t29"] = (
-        oof_analysis["pred_t29"]
-        .rank(method="average", ascending=False)
+    oof_analysis["rank_t29"] = oof_analysis["pred_t29"].rank(
+        method="average", ascending=False
     )
 
     oof_analysis["rank_improvement"] = (
-        oof_analysis["rank_rfe1"]
-        - oof_analysis["rank_t29"]
+        oof_analysis["rank_rfe1"] - oof_analysis["rank_t29"]
     )
-    return
 
 
 @app.cell
 def _(oof_analysis):
     oof_analysis.groupby("TARGET").agg(
-            mean_pred_delta=("pred_delta", "mean"),
-            median_pred_delta=("pred_delta", "median"),
-            mean_rank_improvement=("rank_improvement", "mean"),
-            median_rank_improvement=("rank_improvement", "median"),
-            mean_abs_rank_change=(
-                "rank_improvement",
-                lambda x: x.abs().mean(),
-            ),
-        )
-    return
+        mean_pred_delta=("pred_delta", "mean"),
+        median_pred_delta=("pred_delta", "median"),
+        mean_rank_improvement=("rank_improvement", "mean"),
+        median_rank_improvement=("rank_improvement", "median"),
+        mean_abs_rank_change=(
+            "rank_improvement",
+            lambda x: x.abs().mean(),
+        ),
+    )
 
 
 @app.cell(hide_code=True)
@@ -10634,7 +10242,6 @@ def _(mo):
     #### Top-10% Review Queue Dynamics
     Analyze applicants around the highest-risk 10% decision boundary (`capacity = 0.10`) to assess overlap, queue churn, and target capture consistency between RFE1 and Trial 29.
     """)
-    return
 
 
 @app.cell
@@ -10661,42 +10268,27 @@ def _(oof_analysis):
     print("Overlap:", overlap)
     print("Overlap share:", overlap / n_top)
 
-    print(
-        "Entered T29:",
-        len(top_t29_ids - top_rfe1_ids)
-    )
+    print("Entered T29:", len(top_t29_ids - top_rfe1_ids))
 
-    print(
-        "Left T29:",
-        len(top_rfe1_ids - top_t29_ids)
-    )
+    print("Left T29:", len(top_rfe1_ids - top_t29_ids))
     return top_rfe1_ids, top_t29_ids
 
 
 @app.cell
 def _(oof_analysis, top_rfe1_ids, top_t29_ids):
-    oof_analysis["top10_rfe1"] = (
-        oof_analysis["SK_ID_CURR"].isin(top_rfe1_ids)
-    )
+    oof_analysis["top10_rfe1"] = oof_analysis["SK_ID_CURR"].isin(top_rfe1_ids)
 
-    oof_analysis["top10_t29"] = (
-        oof_analysis["SK_ID_CURR"].isin(top_t29_ids)
-    )
+    oof_analysis["top10_t29"] = oof_analysis["SK_ID_CURR"].isin(top_t29_ids)
 
     oof_analysis["top10_change"] = "same"
 
     oof_analysis.loc[
-        (~oof_analysis["top10_rfe1"])
-        & (oof_analysis["top10_t29"]),
-        "top10_change"
+        (~oof_analysis["top10_rfe1"]) & (oof_analysis["top10_t29"]), "top10_change"
     ] = "entered"
 
     oof_analysis.loc[
-        (oof_analysis["top10_rfe1"])
-        & (~oof_analysis["top10_t29"]),
-        "top10_change"
+        (oof_analysis["top10_rfe1"]) & (~oof_analysis["top10_t29"]), "top10_change"
     ] = "left"
-    return
 
 
 @app.cell
@@ -10705,7 +10297,6 @@ def _(oof_analysis, pd):
         oof_analysis["top10_change"],
         oof_analysis["TARGET"],
     )
-    return
 
 
 @app.cell(hide_code=True)
@@ -10717,13 +10308,11 @@ def _(mo):
     - Boundary movement: Applications entering and leaving the 10% boundary possess virtually identical default rates;
     - Diagnostic conclusion: Trial 29 systematically moves positive applications higher in global ranking and non-defaults lower (driving AP and ROC-AUC gains), but the top-decile review operating point remains stable.
     """)
-    return
 
 
 @app.cell
 def _(oof_analysis):
     oof_analysis
-    return
 
 
 @app.cell(hide_code=True)
@@ -10739,24 +10328,19 @@ def _(mo):
     The analysis focuses on ranking errors rather than using an arbitrary
     classification threshold such as `0.5`.
     """)
-    return
 
 
 @app.cell
 def _(oof_analysis):
     positive_mask = oof_analysis["TARGET"] == 1
 
-    hard_fn_threshold = (
-        oof_analysis.loc[
-            positive_mask,
-            "pred_t29",
-        ]
-        .quantile(0.10)
-    )
+    hard_fn_threshold = oof_analysis.loc[
+        positive_mask,
+        "pred_t29",
+    ].quantile(0.10)
 
-    oof_analysis["hard_fn_t29"] = (
-        (oof_analysis["TARGET"] == 1)
-        & (oof_analysis["pred_t29"] <= hard_fn_threshold)
+    oof_analysis["hard_fn_t29"] = (oof_analysis["TARGET"] == 1) & (
+        oof_analysis["pred_t29"] <= hard_fn_threshold
     )
     return (hard_fn_threshold,)
 
@@ -10765,65 +10349,49 @@ def _(oof_analysis):
 def _(hard_fn_threshold, oof_analysis):
     print("Threshold:", hard_fn_threshold)
 
-    print(
-        oof_analysis["hard_fn_t29"]
-        .value_counts()
-    )
-    return
+    print(oof_analysis["hard_fn_t29"].value_counts())
 
 
 @app.cell
 def _(oof_analysis):
     oof_analysis.loc[
-            oof_analysis["hard_fn_t29"],
-            [
-                "SK_ID_CURR",
-                "TARGET",
-                "pred_rfe1",
-                "pred_t29",
-                "rank_rfe1",
-                "rank_t29",
-            ],
-        ].sort_values("pred_t29").head(20)
-    return
+        oof_analysis["hard_fn_t29"],
+        [
+            "SK_ID_CURR",
+            "TARGET",
+            "pred_rfe1",
+            "pred_t29",
+            "rank_rfe1",
+            "rank_t29",
+        ],
+    ].sort_values("pred_t29").head(20)
 
 
 @app.cell
 def _(oof_analysis):
-    oof_analysis["entered_top10_t29"] = (
-        (~oof_analysis["top10_rfe1"])
-        & (oof_analysis["top10_t29"])
+    oof_analysis["entered_top10_t29"] = (~oof_analysis["top10_rfe1"]) & (
+        oof_analysis["top10_t29"]
     )
-    return
 
 
 @app.cell
 def _(oof_analysis):
-    oof_analysis["left_top10_t29"] = (
-        (oof_analysis["top10_rfe1"])
-        & (~oof_analysis["top10_t29"])
+    oof_analysis["left_top10_t29"] = (oof_analysis["top10_rfe1"]) & (
+        ~oof_analysis["top10_t29"]
     )
-    return
 
 
 @app.cell
 def _(oof_analysis):
-    oof_analysis["abs_rank_change"] = (
-        oof_analysis["rank_improvement"].abs()
-    )
-    return
+    oof_analysis["abs_rank_change"] = oof_analysis["rank_improvement"].abs()
 
 
 @app.cell
 def _(oof_analysis):
-    rank_change_threshold = (
-        oof_analysis["abs_rank_change"]
-        .quantile(0.99)
-    )
+    rank_change_threshold = oof_analysis["abs_rank_change"].quantile(0.99)
 
     oof_analysis["large_rank_disagreement"] = (
-        oof_analysis["abs_rank_change"]
-        >= rank_change_threshold
+        oof_analysis["abs_rank_change"] >= rank_change_threshold
     )
     return (rank_change_threshold,)
 
@@ -10832,25 +10400,18 @@ def _(oof_analysis):
 def _(oof_analysis, rank_change_threshold):
     print("99th percentile rank change:", rank_change_threshold)
 
-    print(
-        oof_analysis["large_rank_disagreement"]
-        .sum()
-    )
-    return
+    print(oof_analysis["large_rank_disagreement"].sum())
 
 
 @app.cell
 def _(oof_analysis):
-    oof_analysis["large_rank_up_t29"] = (
-        oof_analysis["large_rank_disagreement"]
-        & (oof_analysis["rank_improvement"] > 0)
+    oof_analysis["large_rank_up_t29"] = oof_analysis["large_rank_disagreement"] & (
+        oof_analysis["rank_improvement"] > 0
     )
 
-    oof_analysis["large_rank_down_t29"] = (
-        oof_analysis["large_rank_disagreement"]
-        & (oof_analysis["rank_improvement"] < 0)
+    oof_analysis["large_rank_down_t29"] = oof_analysis["large_rank_disagreement"] & (
+        oof_analysis["rank_improvement"] < 0
     )
-    return
 
 
 @app.cell
@@ -10878,16 +10439,13 @@ def _(oof_analysis, pd):
                 "mean_pred_delta": subset["pred_delta"].mean(),
                 "mean_rank_rfe1": subset["rank_rfe1"].mean(),
                 "mean_rank_t29": subset["rank_t29"].mean(),
-                "mean_rank_improvement": subset[
-                    "rank_improvement"
-                ].mean(),
+                "mean_rank_improvement": subset["rank_improvement"].mean(),
             }
         )
 
     group_summary = pd.DataFrame(group_summary)
 
     group_summary
-    return
 
 
 @app.cell(hide_code=True)
@@ -10917,7 +10475,6 @@ def _(mo):
     - Recall@Top10%;
     - prediction distribution.
     """)
-    return
 
 
 @app.cell
@@ -10954,11 +10511,8 @@ def _(error_analysis):
     )
 
     error_analysis["HAS_CREDIT_CARD_HISTORY"] = (
-        error_analysis["HAS_CREDIT_CARD_HISTORY"]
-        .fillna(0)
-        .astype(bool)
+        error_analysis["HAS_CREDIT_CARD_HISTORY"].fillna(0).astype(bool)
     )
-    return
 
 
 @app.cell
@@ -11014,7 +10568,6 @@ def _(error_analysis, pd):
     )
 
     group_summary_ext
-    return
 
 
 @app.cell
@@ -11032,10 +10585,7 @@ def _(error_analysis):
         return {
             "group": name,
             "n": len(df),
-            **{
-                col: df[col].mean()
-                for col in history_flags
-            },
+            **{col: df[col].mean() for col in history_flags},
         }
 
     return (summarize_history,)
@@ -11049,27 +10599,22 @@ def _(error_analysis, pd, summarize_history):
                 error_analysis["TARGET"] == 1,
                 "all_positives",
             ),
-
             summarize_history(
                 error_analysis["hard_fn_t29"],
                 "hard_fn_t29",
             ),
-
             summarize_history(
                 error_analysis["entered_top10_t29"],
                 "entered_top10_t29",
             ),
-
             summarize_history(
                 error_analysis["left_top10_t29"],
                 "left_top10_t29",
             ),
-
             summarize_history(
                 error_analysis["large_rank_up_t29"],
                 "large_rank_up_t29",
             ),
-
             summarize_history(
                 error_analysis["large_rank_down_t29"],
                 "large_rank_down_t29",
@@ -11078,7 +10623,6 @@ def _(error_analysis, pd, summarize_history):
     )
 
     history_summary
-    return
 
 
 @app.cell
@@ -11127,7 +10671,6 @@ def _(error_analysis, pd, summarize_counts):
     )
 
     count_summary
-    return
 
 
 @app.cell(hide_code=True)
@@ -11158,7 +10701,6 @@ def _(mo):
     The next analysis should therefore compare the content of current-application
     and repayment-history features rather than source availability alone.
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -11166,16 +10708,13 @@ def _(mo):
     mo.md(r"""
     #### Profile Comparison: Detected Defaults vs Hard False Negatives
     """)
-    return
 
 
 @app.cell
 def _(error_analysis):
-    error_analysis["detected_positive_t29"] = (
-        (error_analysis["TARGET"] == 1)
-        & (error_analysis["top10_t29"])
+    error_analysis["detected_positive_t29"] = (error_analysis["TARGET"] == 1) & (
+        error_analysis["top10_t29"]
     )
-    return
 
 
 @app.cell
@@ -11184,27 +10723,21 @@ def _(error_analysis, training_dataset):
         "EXT_SOURCE_1",
         "EXT_SOURCE_2",
         "EXT_SOURCE_3",
-
         "AMT_INCOME_TOTAL",
         "AMT_CREDIT",
         "AMT_ANNUITY",
         "AMT_GOODS_PRICE",
-
         "CREDIT_INCOME_RATIO",
         "ANNUITY_INCOME_RATIO",
         "ANNUITY_CREDIT_RATIO",
-
         "DAYS_BIRTH",
         "DAYS_EMPLOYED",
-
         "NAME_CONTRACT_TYPE",
         "CODE_GENDER",
     ]
 
     profile_analysis = error_analysis.merge(
-        training_dataset[
-            ["SK_ID_CURR"] + CURRENT_PROFILE_FEATURES
-        ],
+        training_dataset[["SK_ID_CURR"] + CURRENT_PROFILE_FEATURES],
         on="SK_ID_CURR",
         how="left",
         validate="one_to_one",
@@ -11218,16 +10751,13 @@ def _(pd):
         "EXT_SOURCE_1",
         "EXT_SOURCE_2",
         "EXT_SOURCE_3",
-
         "AMT_INCOME_TOTAL",
         "AMT_CREDIT",
         "AMT_ANNUITY",
         "AMT_GOODS_PRICE",
-
         "CREDIT_INCOME_RATIO",
         "ANNUITY_INCOME_RATIO",
         "ANNUITY_CREDIT_RATIO",
-
         "DAYS_BIRTH",
         "DAYS_EMPLOYED",
     ]
@@ -11235,24 +10765,16 @@ def _(pd):
     def summarize_numeric_group(df, mask, features, prefix):
         subset = df.loc[mask]
 
-        return pd.DataFrame({
-            "feature": features,
-
-            f"{prefix}_mean": [
-                subset[feature].mean()
-                for feature in features
-            ],
-
-            f"{prefix}_median": [
-                subset[feature].median()
-                for feature in features
-            ],
-
-            f"{prefix}_missing_share": [
-                subset[feature].isna().mean()
-                for feature in features
-            ],
-        })
+        return pd.DataFrame(
+            {
+                "feature": features,
+                f"{prefix}_mean": [subset[feature].mean() for feature in features],
+                f"{prefix}_median": [subset[feature].median() for feature in features],
+                f"{prefix}_missing_share": [
+                    subset[feature].isna().mean() for feature in features
+                ],
+            }
+        )
 
     return numeric_profile_features, summarize_numeric_group
 
@@ -11289,42 +10811,35 @@ def _(detected_profile, hard_fn_profile):
 @app.cell
 def _(profile_comparison):
     profile_comparison["mean_delta"] = (
-        profile_comparison["hard_fn_mean"]
-        - profile_comparison["detected_mean"]
+        profile_comparison["hard_fn_mean"] - profile_comparison["detected_mean"]
     )
 
     profile_comparison["median_delta"] = (
-        profile_comparison["hard_fn_median"]
-        - profile_comparison["detected_median"]
+        profile_comparison["hard_fn_median"] - profile_comparison["detected_median"]
     )
 
     profile_comparison["missing_delta"] = (
         profile_comparison["hard_fn_missing_share"]
         - profile_comparison["detected_missing_share"]
     )
-    return
 
 
 @app.cell
 def _(profile_comparison):
     profile_comparison[
-            [
-                "feature",
-
-                "hard_fn_mean",
-                "detected_mean",
-                "mean_delta",
-
-                "hard_fn_median",
-                "detected_median",
-                "median_delta",
-
-                "hard_fn_missing_share",
-                "detected_missing_share",
-                "missing_delta",
-            ]
+        [
+            "feature",
+            "hard_fn_mean",
+            "detected_mean",
+            "mean_delta",
+            "hard_fn_median",
+            "detected_median",
+            "median_delta",
+            "hard_fn_missing_share",
+            "detected_missing_share",
+            "missing_delta",
         ]
-    return
+    ]
 
 
 @app.cell(hide_code=True)
@@ -11546,7 +11061,6 @@ def _(mo):
 
     The internal holdout remains untouched.
     """)
-    return
 
 
 @app.cell
@@ -11570,20 +11084,13 @@ def _(error_analysis, score_max, score_min):
         & (error_analysis["pred_t29"] >= score_min)
         & (error_analysis["pred_t29"] <= score_max)
     )
-    return
 
 
 @app.cell
 def _(error_analysis):
-    print(
-        "Hard FN:",
-        error_analysis["hard_fn_t29"].sum()
-    )
+    print("Hard FN:", error_analysis["hard_fn_t29"].sum())
 
-    print(
-        "Safe negatives:",
-        error_analysis["safe_negative_match"].sum()
-    )
+    print("Safe negatives:", error_analysis["safe_negative_match"].sum())
 
     print(
         error_analysis.loc[
@@ -11598,32 +11105,17 @@ def _(error_analysis):
             "pred_t29",
         ].describe()
     )
-    return
 
 
 @app.cell
 def _(error_analysis, np):
-    hard_fn = (
-        error_analysis.loc[
-            error_analysis["hard_fn_t29"]
-        ]
-        .copy()
-    )
+    hard_fn = error_analysis.loc[error_analysis["hard_fn_t29"]].copy()
 
-    safe_negatives = (
-        error_analysis.loc[
-            error_analysis["TARGET"] == 0
-        ]
-        .copy()
-    )
+    safe_negatives = error_analysis.loc[error_analysis["TARGET"] == 0].copy()
 
     quantiles = np.linspace(0, 1, 21)
 
-    bin_edges = (
-        hard_fn["pred_t29"]
-        .quantile(quantiles)
-        .to_numpy()
-    )
+    bin_edges = hard_fn["pred_t29"].quantile(quantiles).to_numpy()
 
     bin_edges = np.unique(bin_edges)
     bin_edges[0] -= 1e-12
@@ -11644,7 +11136,6 @@ def _(bin_edges, hard_fn, pd, safe_negatives):
         bins=bin_edges,
         include_lowest=True,
     )
-    return
 
 
 @app.cell
@@ -11655,17 +11146,13 @@ def _(hard_fn, pd, safe_negatives):
         "score_bin",
         observed=True,
     ):
-        negative_bin = safe_negatives.loc[
-            safe_negatives["score_bin"] == score_bin
-        ]
+        negative_bin = safe_negatives.loc[safe_negatives["score_bin"] == score_bin]
 
         n_needed = len(hard_bin)
 
         if len(negative_bin) < n_needed:
             print(
-                f"Warning: {score_bin}: "
-                f"need {n_needed}, "
-                f"available {len(negative_bin)}"
+                f"Warning: {score_bin}: need {n_needed}, available {len(negative_bin)}"
             )
 
             n_needed = len(negative_bin)
@@ -11689,42 +11176,29 @@ def _(hard_fn, pd, safe_negatives):
 def _(hard_fn, matched_negatives):
     print("Hard FN:", len(hard_fn))
     print("Matched negatives:", len(matched_negatives))
-    return
 
 
 @app.cell
 def _(hard_fn, matched_negatives, pd):
-    score_comparison = pd.DataFrame({
-        "hard_fn": hard_fn["pred_t29"].describe(),
-        "matched_negative": matched_negatives["pred_t29"].describe(),
-    })
+    score_comparison = pd.DataFrame(
+        {
+            "hard_fn": hard_fn["pred_t29"].describe(),
+            "matched_negative": matched_negatives["pred_t29"].describe(),
+        }
+    )
 
     score_comparison
-    return
 
 
 @app.cell
 def _(hard_fn, matched_negatives):
-    print(
-        "Hard FN mean score:",
-        hard_fn["pred_t29"].mean()
-    )
+    print("Hard FN mean score:", hard_fn["pred_t29"].mean())
 
-    print(
-        "Matched negative mean score:",
-        matched_negatives["pred_t29"].mean()
-    )
+    print("Matched negative mean score:", matched_negatives["pred_t29"].mean())
 
-    print(
-        "Hard FN median score:",
-        hard_fn["pred_t29"].median()
-    )
+    print("Hard FN median score:", hard_fn["pred_t29"].median())
 
-    print(
-        "Matched negative median score:",
-        matched_negatives["pred_t29"].median()
-    )
-    return
+    print("Matched negative median score:", matched_negatives["pred_t29"].median())
 
 
 @app.cell
@@ -11740,13 +11214,13 @@ def _(FINAL_FEATURES):
                 "CC_",
             )
         )
-        and feature not in [
+        and feature
+        not in [
             "BUREAU_CREDIT_COUNT",
             "PREV_APP_COUNT",
             "IP_CONTRACT_COUNT",
             "HAS_CREDIT_CARD_HISTORY",
         ]
-
     ]
     return (historical_features,)
 
@@ -11754,18 +11228,14 @@ def _(FINAL_FEATURES):
 @app.cell
 def _(hard_fn, historical_features, matched_negatives, training_dataset):
     hard_history = hard_fn.merge(
-        training_dataset[
-            ["SK_ID_CURR"] + historical_features
-        ],
+        training_dataset[["SK_ID_CURR"] + historical_features],
         on="SK_ID_CURR",
         how="left",
         validate="one_to_one",
     )
 
     matched_history = matched_negatives.merge(
-        training_dataset[
-            ["SK_ID_CURR"] + historical_features
-        ],
+        training_dataset[["SK_ID_CURR"] + historical_features],
         on="SK_ID_CURR",
         how="left",
         validate="one_to_one",
@@ -11795,47 +11265,31 @@ def _(np, pd):
             var_a = a.var()
             var_b = b.var()
 
-            pooled_std = np.sqrt(
-                (var_a + var_b) / 2
-            )
+            pooled_std = np.sqrt((var_a + var_b) / 2)
 
-            if (
-                pd.notna(pooled_std)
-                and pooled_std > 0
-            ):
-                smd = (
-                    mean_a - mean_b
-                ) / pooled_std
+            if pd.notna(pooled_std) and pooled_std > 0:
+                smd = (mean_a - mean_b) / pooled_std
             else:
                 smd = np.nan
 
-            rows.append({
-                "feature": feature,
-
-                "hard_fn_mean": mean_a,
-                "matched_neg_mean": mean_b,
-
-                "hard_fn_median": median_a,
-                "matched_neg_median": median_b,
-
-                "smd": smd,
-                "abs_smd": abs(smd)
-                    if pd.notna(smd)
-                    else np.nan,
-
-                "hard_fn_missing": (
-                    a.isna().mean()
-                ),
-                "matched_neg_missing": (
-                    b.isna().mean()
-                ),
-            })
+            rows.append(
+                {
+                    "feature": feature,
+                    "hard_fn_mean": mean_a,
+                    "matched_neg_mean": mean_b,
+                    "hard_fn_median": median_a,
+                    "matched_neg_median": median_b,
+                    "smd": smd,
+                    "abs_smd": abs(smd) if pd.notna(smd) else np.nan,
+                    "hard_fn_missing": (a.isna().mean()),
+                    "matched_neg_missing": (b.isna().mean()),
+                }
+            )
 
         result = pd.DataFrame(rows)
 
         result["missing_delta"] = (
-            result["hard_fn_missing"]
-            - result["matched_neg_missing"]
+            result["hard_fn_missing"] - result["matched_neg_missing"]
         )
 
         return result.sort_values(
@@ -11859,9 +11313,7 @@ def _(
         historical_features,
     )
 
-
     history_comparison.head(25)
-    return
 
 
 @app.cell
@@ -11870,7 +11322,6 @@ def _(profile_analysis, training_dataset):
         # Bureau exposure
         "BUREAU_TOTAL_CREDIT_DEBT",
         "BUREAU_TOTAL_CREDIT_SUM",
-
         # Credit card exposure
         "CC_MAX_BALANCE",
         "CC_MEAN_BALANCE",
@@ -11884,9 +11335,7 @@ def _(profile_analysis, training_dataset):
     ]
 
     cross_analysis = profile_analysis.merge(
-        training_dataset[
-            ["SK_ID_CURR"] + available_cross_features
-        ],
+        training_dataset[["SK_ID_CURR"] + available_cross_features],
         on="SK_ID_CURR",
         how="left",
         validate="one_to_one",
@@ -11897,67 +11346,50 @@ def _(profile_analysis, training_dataset):
 @app.cell
 def _(cross_analysis):
     cross_analysis["BUREAU_DEBT_INCOME_RATIO"] = (
-        cross_analysis["BUREAU_TOTAL_CREDIT_DEBT"]
-        / cross_analysis["AMT_INCOME_TOTAL"]
+        cross_analysis["BUREAU_TOTAL_CREDIT_DEBT"] / cross_analysis["AMT_INCOME_TOTAL"]
     )
 
     cross_analysis["BUREAU_DEBT_CURRENT_CREDIT_RATIO"] = (
-        cross_analysis["BUREAU_TOTAL_CREDIT_DEBT"]
-        / cross_analysis["AMT_CREDIT"]
+        cross_analysis["BUREAU_TOTAL_CREDIT_DEBT"] / cross_analysis["AMT_CREDIT"]
     )
-    return
 
 
 @app.cell
 def _(cross_analysis):
     cross_analysis["TOTAL_CREDIT_EXPOSURE"] = (
-        cross_analysis["AMT_CREDIT"]
-        + cross_analysis["BUREAU_TOTAL_CREDIT_DEBT"]
+        cross_analysis["AMT_CREDIT"] + cross_analysis["BUREAU_TOTAL_CREDIT_DEBT"]
     )
 
     cross_analysis["TOTAL_EXPOSURE_INCOME_RATIO"] = (
-        cross_analysis["TOTAL_CREDIT_EXPOSURE"]
-        / cross_analysis["AMT_INCOME_TOTAL"]
+        cross_analysis["TOTAL_CREDIT_EXPOSURE"] / cross_analysis["AMT_INCOME_TOTAL"]
     )
-    return
 
 
 @app.cell
 def _(cross_analysis):
     cross_analysis["CC_MAX_BALANCE_INCOME_RATIO"] = (
-        cross_analysis["CC_MAX_BALANCE"]
-        / cross_analysis["AMT_INCOME_TOTAL"]
+        cross_analysis["CC_MAX_BALANCE"] / cross_analysis["AMT_INCOME_TOTAL"]
     )
 
     cross_analysis["CC_MAX_BALANCE_CURRENT_CREDIT_RATIO"] = (
-        cross_analysis["CC_MAX_BALANCE"]
-        / cross_analysis["AMT_CREDIT"]
+        cross_analysis["CC_MAX_BALANCE"] / cross_analysis["AMT_CREDIT"]
     )
-    return
 
 
 @app.cell
 def _(cross_analysis, matched_negatives):
-    matched_negative_ids = set(
-        matched_negatives["SK_ID_CURR"]
-    )
+    matched_negative_ids = set(matched_negatives["SK_ID_CURR"])
 
-    cross_analysis["matched_negative"] = (
-        cross_analysis["SK_ID_CURR"]
-        .isin(matched_negative_ids)
+    cross_analysis["matched_negative"] = cross_analysis["SK_ID_CURR"].isin(
+        matched_negative_ids
     )
-    return
 
 
 @app.cell
 def _(cross_analysis):
-    hard_cross = cross_analysis.loc[
-        cross_analysis["hard_fn_t29"]
-    ]
+    hard_cross = cross_analysis.loc[cross_analysis["hard_fn_t29"]]
 
-    matched_cross = cross_analysis.loc[
-        cross_analysis["matched_negative"]
-    ]
+    matched_cross = cross_analysis.loc[cross_analysis["matched_negative"]]
     return hard_cross, matched_cross
 
 
@@ -11971,7 +11403,6 @@ def _(hard_cross, matched_cross):
 
     print(hard_cross["pred_t29"].median())
     print(matched_cross["pred_t29"].median())
-    return
 
 
 @app.cell
@@ -11995,42 +11426,29 @@ def _(compare_numeric_features, cross_features, hard_cross, matched_cross):
     )
 
     cross_comparison
-    return
 
 
 @app.cell
 def _(matched_negatives, profile_analysis):
-    matched_negative_ids_profile = set(
-        matched_negatives["SK_ID_CURR"]
-    )
+    matched_negative_ids_profile = set(matched_negatives["SK_ID_CURR"])
 
-    profile_analysis["matched_negative"] = (
-        profile_analysis["SK_ID_CURR"]
-        .isin(matched_negative_ids_profile)
+    profile_analysis["matched_negative"] = profile_analysis["SK_ID_CURR"].isin(
+        matched_negative_ids_profile
     )
-    return
 
 
 @app.cell
 def _(profile_analysis):
-    print(
-        profile_analysis["hard_fn_t29"].sum()
-    )
+    print(profile_analysis["hard_fn_t29"].sum())
 
-    print(
-        profile_analysis["matched_negative"].sum()
-    )
-    return
+    print(profile_analysis["matched_negative"].sum())
 
 
 @app.cell
 def _(profile_analysis):
     profile_analysis["DAYS_EMPLOYED_MISSING"] = (
-        profile_analysis["DAYS_EMPLOYED"]
-        .isna()
-        .astype("int8")
+        profile_analysis["DAYS_EMPLOYED"].isna().astype("int8")
     )
-    return
 
 
 @app.cell
@@ -12039,19 +11457,15 @@ def _():
         "EXT_SOURCE_1",
         "EXT_SOURCE_2",
         "EXT_SOURCE_3",
-
         "AMT_INCOME_TOTAL",
         "AMT_CREDIT",
         "AMT_ANNUITY",
         "AMT_GOODS_PRICE",
-
         "CREDIT_INCOME_RATIO",
         "ANNUITY_INCOME_RATIO",
         "ANNUITY_CREDIT_RATIO",
-
         "DAYS_BIRTH",
         "DAYS_EMPLOYED",
-
         "DAYS_EMPLOYED_MISSING",
     ]
     return (current_numeric_features,)
@@ -12059,13 +11473,9 @@ def _():
 
 @app.cell
 def _(profile_analysis):
-    hard_current = profile_analysis.loc[
-        profile_analysis["hard_fn_t29"]
-    ]
+    hard_current = profile_analysis.loc[profile_analysis["hard_fn_t29"]]
 
-    matched_current = profile_analysis.loc[
-        profile_analysis["matched_negative"]
-    ]
+    matched_current = profile_analysis.loc[profile_analysis["matched_negative"]]
     return hard_current, matched_current
 
 
@@ -12089,13 +11499,11 @@ def _(
 @app.cell
 def _(current_comparison):
     current_comparison.assign(
-            abs_missing_delta=lambda x:
-                x["missing_delta"].abs()
-        ).sort_values(
-            "abs_missing_delta",
-            ascending=False,
-        )
-    return
+        abs_missing_delta=lambda x: x["missing_delta"].abs()
+    ).sort_values(
+        "abs_missing_delta",
+        ascending=False,
+    )
 
 
 @app.cell(hide_code=True)
@@ -12201,7 +11609,6 @@ def _(mo):
     The goal is to generate a small number of testable feature hypotheses rather
     than to optimize metrics separately for every subgroup.
     """)
-    return
 
 
 @app.cell
@@ -12226,9 +11633,7 @@ def _(training_dataset):
 @app.cell
 def _(categorical_cohort_features, oof_analysis, training_dataset):
     cohort_analysis = oof_analysis.merge(
-        training_dataset[
-            ["SK_ID_CURR"] + categorical_cohort_features
-        ],
+        training_dataset[["SK_ID_CURR"] + categorical_cohort_features],
         on="SK_ID_CURR",
         how="left",
         validate="one_to_one",
@@ -12240,21 +11645,15 @@ def _(categorical_cohort_features, oof_analysis, training_dataset):
 def _(categorical_cohort_features, cohort_analysis):
     for cat_feature in categorical_cohort_features:
         cohort_analysis[cat_feature] = (
-            cohort_analysis[cat_feature]
-            .astype("object")
-            .fillna("<MISSING>")
+            cohort_analysis[cat_feature].astype("object").fillna("<MISSING>")
         )
-    return
 
 
 @app.cell
 def _(cohort_analysis):
     assert "top10_t29" in cohort_analysis.columns
 
-    print(
-        cohort_analysis["top10_t29"].mean()
-    )
-    return
+    print(cohort_analysis["top10_t29"].mean())
 
 
 @app.cell
@@ -12280,10 +11679,7 @@ def _(average_precision_score, np, pd, roc_auc_score):
 
             mean_prediction = group[score_col].mean()
 
-            if (
-                n_positive > 0
-                and n_negative > 0
-            ):
+            if n_positive > 0 and n_negative > 0:
                 ap = average_precision_score(
                     group["TARGET"],
                     group[score_col],
@@ -12312,20 +11708,15 @@ def _(average_precision_score, np, pd, roc_auc_score):
             ].sum()
 
             if n_positive > 0:
-                recall_global_top10 = (
-                    reviewed_positive
-                    / n_positive
-                )
+                recall_global_top10 = reviewed_positive / n_positive
             else:
                 recall_global_top10 = np.nan
 
             if reviewed.sum() > 0:
-                precision_global_top10 = (
-                    group.loc[
-                        reviewed,
-                        "TARGET",
-                    ].mean()
-                )
+                precision_global_top10 = group.loc[
+                    reviewed,
+                    "TARGET",
+                ].mean()
             else:
                 precision_global_top10 = np.nan
 
@@ -12333,25 +11724,17 @@ def _(average_precision_score, np, pd, roc_auc_score):
                 {
                     "feature": cohort_feature,
                     "cohort": cohort_value,
-
                     "n": n,
                     "n_positive": n_positive,
                     "n_negative": n_negative,
-
                     "prevalence": prevalence,
                     "mean_prediction": mean_prediction,
-
                     "ap": ap,
                     "ap_lift": ap_lift,
                     "roc_auc": roc_auc,
-
                     "review_rate": review_rate,
-                    "recall_global_top10": (
-                        recall_global_top10
-                    ),
-                    "precision_global_top10": (
-                        precision_global_top10
-                    ),
+                    "recall_global_top10": (recall_global_top10),
+                    "precision_global_top10": (precision_global_top10),
                 }
             )
 
@@ -12373,8 +11756,7 @@ def _(
                 cohort_analysis,
                 feature,
             )
-            for feature
-            in categorical_cohort_features
+            for feature in categorical_cohort_features
         ],
         ignore_index=True,
     )
@@ -12389,29 +11771,22 @@ def _(
 
 @app.cell
 def _(categorical_results):
-    reliable_categorical_results = (
-        categorical_results.loc[
-            categorical_results["reliable"]
-        ]
-        .sort_values(
-            [
-                "ap_lift",
-                "roc_auc",
-            ],
-            ascending=True,
-        )
+    reliable_categorical_results = categorical_results.loc[
+        categorical_results["reliable"]
+    ].sort_values(
+        [
+            "ap_lift",
+            "roc_auc",
+        ],
+        ascending=True,
     )
 
-
     reliable_categorical_results
-    return
 
 
 @app.cell
 def _(average_precision_score, cohort_analysis, roc_auc_score):
-    global_prevalence = (
-        cohort_analysis["TARGET"].mean()
-    )
+    global_prevalence = cohort_analysis["TARGET"].mean()
 
     global_ap = average_precision_score(
         cohort_analysis["TARGET"],
@@ -12423,9 +11798,7 @@ def _(average_precision_score, cohort_analysis, roc_auc_score):
         cohort_analysis["pred_t29"],
     )
 
-    global_ap_lift = (
-        global_ap / global_prevalence
-    )
+    global_ap_lift = global_ap / global_prevalence
 
     print("Global prevalence:", global_prevalence)
     print("Global AP:", global_ap)
@@ -12437,15 +11810,12 @@ def _(average_precision_score, cohort_analysis, roc_auc_score):
 @app.cell
 def _(categorical_results, global_ap_lift, global_auc):
     categorical_results["auc_delta_vs_global"] = (
-        categorical_results["roc_auc"]
-        - global_auc
+        categorical_results["roc_auc"] - global_auc
     )
 
     categorical_results["ap_lift_ratio_vs_global"] = (
-        categorical_results["ap_lift"]
-        / global_ap_lift
+        categorical_results["ap_lift"] / global_ap_lift
     )
-    return
 
 
 @app.cell
@@ -12489,9 +11859,7 @@ def _(average_precision_score, cohort_analysis, pd, roc_auc_score):
             }
         )
 
-    global_fold_metrics = pd.DataFrame(
-        global_fold_metrics
-    )
+    global_fold_metrics = pd.DataFrame(global_fold_metrics)
 
     global_fold_metrics
     return (global_fold_metrics,)
@@ -12507,9 +11875,7 @@ def _(average_precision_score, np, pd, roc_auc_score):
     ):
         rows = []
 
-        cohort_df = df.loc[
-            df[feature] == cohort_value
-        ]
+        cohort_df = df.loc[df[feature] == cohort_value]
 
         for fold, group in cohort_df.groupby("fold"):
             n = len(group)
@@ -12530,11 +11896,7 @@ def _(average_precision_score, np, pd, roc_auc_score):
                     group[score_col],
                 )
 
-                ap_lift = (
-                    ap / prevalence
-                    if prevalence > 0
-                    else np.nan
-                )
+                ap_lift = ap / prevalence if prevalence > 0 else np.nan
             else:
                 ap = np.nan
                 auc = np.nan
@@ -12545,13 +11907,10 @@ def _(average_precision_score, np, pd, roc_auc_score):
                     "feature": feature,
                     "cohort": cohort_value,
                     "fold": fold,
-
                     "n": n,
                     "n_positive": n_positive,
                     "n_negative": n_negative,
-
                     "prevalence": prevalence,
-
                     "ap": ap,
                     "ap_lift": ap_lift,
                     "roc_auc": auc,
@@ -12578,33 +11937,24 @@ def _(
                 feature,
                 cohort,
             )
-            for feature, cohort
-            in candidate_cohorts
+            for feature, cohort in candidate_cohorts
         ],
         ignore_index=True,
     )
 
-    candidate_fold_results = (
-        candidate_fold_results.merge(
-            global_fold_metrics,
-            on="fold",
-            how="left",
-            validate="many_to_one",
-        )
+    candidate_fold_results = candidate_fold_results.merge(
+        global_fold_metrics,
+        on="fold",
+        how="left",
+        validate="many_to_one",
     )
 
-    candidate_fold_results[
-        "auc_delta_vs_global"
-    ] = (
-        candidate_fold_results["roc_auc"]
-        - candidate_fold_results["global_auc"]
+    candidate_fold_results["auc_delta_vs_global"] = (
+        candidate_fold_results["roc_auc"] - candidate_fold_results["global_auc"]
     )
 
-    candidate_fold_results[
-        "ap_lift_ratio_vs_global"
-    ] = (
-        candidate_fold_results["ap_lift"]
-        / candidate_fold_results["global_ap_lift"]
+    candidate_fold_results["ap_lift_ratio_vs_global"] = (
+        candidate_fold_results["ap_lift"] / candidate_fold_results["global_ap_lift"]
     )
     return (candidate_fold_results,)
 
@@ -12612,70 +11962,53 @@ def _(
 @app.cell
 def _(candidate_fold_results):
     candidate_fold_results[
-            [
-                "feature",
-                "cohort",
-                "fold",
-
-                "n",
-                "n_positive",
-
-                "prevalence",
-
-                "roc_auc",
-                "global_auc",
-                "auc_delta_vs_global",
-
-                "ap_lift",
-                "global_ap_lift",
-                "ap_lift_ratio_vs_global",
-            ]
-        ].sort_values(
-            ["feature", "cohort", "fold"]
-        )
-    return
+        [
+            "feature",
+            "cohort",
+            "fold",
+            "n",
+            "n_positive",
+            "prevalence",
+            "roc_auc",
+            "global_auc",
+            "auc_delta_vs_global",
+            "ap_lift",
+            "global_ap_lift",
+            "ap_lift_ratio_vs_global",
+        ]
+    ].sort_values(["feature", "cohort", "fold"])
 
 
 @app.cell
 def _(candidate_fold_results):
-    cohort_fold_summary = (
-        candidate_fold_results
-        .groupby(
-            ["feature", "cohort"],
-            as_index=False,
-        )
-        .agg(
-            total_n=("n", "sum"),
-            total_positive=("n_positive", "sum"),
-
-            mean_auc=("roc_auc", "mean"),
-            std_auc=("roc_auc", "std"),
-
-            mean_auc_delta=(
-                "auc_delta_vs_global",
-                "mean",
-            ),
-
-            min_auc_delta=(
-                "auc_delta_vs_global",
-                "min",
-            ),
-
-            max_auc_delta=(
-                "auc_delta_vs_global",
-                "max",
-            ),
-
-            mean_ap_lift_ratio=(
-                "ap_lift_ratio_vs_global",
-                "mean",
-            ),
-
-            std_ap_lift_ratio=(
-                "ap_lift_ratio_vs_global",
-                "std",
-            ),
-        )
+    cohort_fold_summary = candidate_fold_results.groupby(
+        ["feature", "cohort"],
+        as_index=False,
+    ).agg(
+        total_n=("n", "sum"),
+        total_positive=("n_positive", "sum"),
+        mean_auc=("roc_auc", "mean"),
+        std_auc=("roc_auc", "std"),
+        mean_auc_delta=(
+            "auc_delta_vs_global",
+            "mean",
+        ),
+        min_auc_delta=(
+            "auc_delta_vs_global",
+            "min",
+        ),
+        max_auc_delta=(
+            "auc_delta_vs_global",
+            "max",
+        ),
+        mean_ap_lift_ratio=(
+            "ap_lift_ratio_vs_global",
+            "mean",
+        ),
+        std_ap_lift_ratio=(
+            "ap_lift_ratio_vs_global",
+            "std",
+        ),
     )
     return (cohort_fold_summary,)
 
@@ -12683,86 +12016,52 @@ def _(candidate_fold_results):
 @app.cell
 def _(candidate_fold_results, cohort_fold_summary):
     auc_worse_counts = (
-        candidate_fold_results
-        .assign(
-            auc_worse=lambda x:
-                x["auc_delta_vs_global"] < 0
-        )
+        candidate_fold_results.assign(auc_worse=lambda x: x["auc_delta_vs_global"] < 0)
         .groupby(
             ["feature", "cohort"],
             as_index=False,
         )["auc_worse"]
         .sum()
-        .rename(
-            columns={
-                "auc_worse": "auc_worse_folds"
-            }
-        )
+        .rename(columns={"auc_worse": "auc_worse_folds"})
     )
 
     ap_worse_counts = (
-        candidate_fold_results
-        .assign(
-            ap_lift_worse=lambda x:
-                x["ap_lift_ratio_vs_global"] < 1
+        candidate_fold_results.assign(
+            ap_lift_worse=lambda x: x["ap_lift_ratio_vs_global"] < 1
         )
         .groupby(
             ["feature", "cohort"],
             as_index=False,
         )["ap_lift_worse"]
         .sum()
-        .rename(
-            columns={
-                "ap_lift_worse":
-                    "ap_lift_worse_folds"
-            }
-        )
+        .rename(columns={"ap_lift_worse": "ap_lift_worse_folds"})
     )
 
-    cohort_fold_summary_merged = (
-        cohort_fold_summary
-        .merge(
-            auc_worse_counts,
-            on=["feature", "cohort"],
-            validate="one_to_one",
-        )
-        .merge(
-            ap_worse_counts,
-            on=["feature", "cohort"],
-            validate="one_to_one",
-        )
+    cohort_fold_summary_merged = cohort_fold_summary.merge(
+        auc_worse_counts,
+        on=["feature", "cohort"],
+        validate="one_to_one",
+    ).merge(
+        ap_worse_counts,
+        on=["feature", "cohort"],
+        validate="one_to_one",
     )
-    return
 
 
 @app.cell
 def _(cohort_fold_summary):
-    cohort_fold_summary.sort_values(
-            "mean_auc_delta"
-        )
-    return
+    cohort_fold_summary.sort_values("mean_auc_delta")
 
 
 @app.cell
 def _(cohort_analysis):
-    driver_mask = (
-        cohort_analysis["OCCUPATION_TYPE"] == "Drivers"
-    )
+    driver_mask = cohort_analysis["OCCUPATION_TYPE"] == "Drivers"
 
-    transport4_mask = (
-        cohort_analysis["ORGANIZATION_TYPE"]
-        == "Transport: type 4"
-    )
+    transport4_mask = cohort_analysis["ORGANIZATION_TYPE"] == "Transport: type 4"
 
-    low_skill_mask = (
-        cohort_analysis["OCCUPATION_TYPE"]
-        == "Low-skill Laborers"
-    )
+    low_skill_mask = cohort_analysis["OCCUPATION_TYPE"] == "Low-skill Laborers"
 
-    lower_secondary_mask = (
-        cohort_analysis["NAME_EDUCATION_TYPE"]
-        == "Lower secondary"
-    )
+    lower_secondary_mask = cohort_analysis["NAME_EDUCATION_TYPE"] == "Lower secondary"
     return driver_mask, low_skill_mask, lower_secondary_mask, transport4_mask
 
 
@@ -12770,50 +12069,39 @@ def _(cohort_analysis):
 def _(driver_mask, low_skill_mask, lower_secondary_mask, transport4_mask):
     print(
         "Transport4 who are Drivers:",
-        (
-            driver_mask & transport4_mask
-        ).sum() / transport4_mask.sum()
+        (driver_mask & transport4_mask).sum() / transport4_mask.sum(),
     )
 
     print(
         "Drivers in Transport4:",
-        (
-            driver_mask & transport4_mask
-        ).sum() / driver_mask.sum()
+        (driver_mask & transport4_mask).sum() / driver_mask.sum(),
     )
 
     print(
         "Drivers with lower secondary:",
-        (
-            driver_mask & lower_secondary_mask
-        ).sum() / driver_mask.sum()
+        (driver_mask & lower_secondary_mask).sum() / driver_mask.sum(),
     )
 
     print(
         "Low-skill with lower secondary:",
-        (
-            low_skill_mask & lower_secondary_mask
-        ).sum() / low_skill_mask.sum()
+        (low_skill_mask & lower_secondary_mask).sum() / low_skill_mask.sum(),
     )
-    return
 
 
 @app.cell
 def _(cohort_analysis, driver_mask):
     cohort_analysis.loc[
-            driver_mask,
-            "ORGANIZATION_TYPE",
-        ].value_counts(normalize=True).head(15).rename("share").to_frame()
-    return
+        driver_mask,
+        "ORGANIZATION_TYPE",
+    ].value_counts(normalize=True).head(15).rename("share").to_frame()
 
 
 @app.cell
 def _(cohort_analysis, driver_mask):
     cohort_analysis.loc[
-            driver_mask,
-            "NAME_EDUCATION_TYPE",
-        ].value_counts(normalize=True).rename("share").to_frame()
-    return
+        driver_mask,
+        "NAME_EDUCATION_TYPE",
+    ].value_counts(normalize=True).rename("share").to_frame()
 
 
 @app.cell(hide_code=True)
@@ -12821,7 +12109,6 @@ def _(mo):
     mo.md(r"""
     #### EA1.3.2 — Feature separation inside Drivers
     """)
-    return
 
 
 @app.cell
@@ -12830,11 +12117,8 @@ def _(FINAL_FEATURES, pd, training_dataset):
         feature
         for feature in FINAL_FEATURES
         if feature in training_dataset.columns
-        and pd.api.types.is_numeric_dtype(
-            training_dataset[feature]
-        )
+        and pd.api.types.is_numeric_dtype(training_dataset[feature])
     ]
-
 
     print("Final features:", len(FINAL_FEATURES))
     print("Numeric final features:", len(numeric_final_features))
@@ -12844,18 +12128,13 @@ def _(FINAL_FEATURES, pd, training_dataset):
 @app.cell
 def _(numeric_final_features, oof_analysis, training_dataset):
     driver_analysis = oof_analysis.merge(
-        training_dataset[
-            ["SK_ID_CURR", "OCCUPATION_TYPE"]
-            + numeric_final_features
-        ],
+        training_dataset[["SK_ID_CURR", "OCCUPATION_TYPE"] + numeric_final_features],
         on="SK_ID_CURR",
         how="left",
         validate="one_to_one",
     )
 
-    driver_analysis["IS_DRIVER"] = (
-        driver_analysis["OCCUPATION_TYPE"] == "Drivers"
-    )
+    driver_analysis["IS_DRIVER"] = driver_analysis["OCCUPATION_TYPE"] == "Drivers"
     return (driver_analysis,)
 
 
@@ -12869,7 +12148,6 @@ def _(driver_analysis):
             "TARGET",
         ].sum()
     )
-    return
 
 
 @app.cell
@@ -12882,9 +12160,7 @@ def _(np, pd, roc_auc_score):
         rows = []
 
         for feature in features:
-            feature_df = df[
-                ["TARGET", feature]
-            ].dropna()
+            feature_df = df[["TARGET", feature]].dropna()
 
             positives = feature_df.loc[
                 feature_df["TARGET"] == 1,
@@ -12896,10 +12172,7 @@ def _(np, pd, roc_auc_score):
                 feature,
             ]
 
-            if (
-                len(positives) == 0
-                or len(negatives) == 0
-            ):
+            if len(positives) == 0 or len(negatives) == 0:
                 continue
 
             mean_pos = positives.mean()
@@ -12908,21 +12181,10 @@ def _(np, pd, roc_auc_score):
             median_pos = positives.median()
             median_neg = negatives.median()
 
-            pooled_std = np.sqrt(
-                (
-                    positives.var()
-                    + negatives.var()
-                )
-                / 2
-            )
+            pooled_std = np.sqrt((positives.var() + negatives.var()) / 2)
 
-            if (
-                pd.notna(pooled_std)
-                and pooled_std > 0
-            ):
-                smd = (
-                    mean_pos - mean_neg
-                ) / pooled_std
+            if pd.notna(pooled_std) and pooled_std > 0:
+                smd = (mean_pos - mean_neg) / pooled_std
             else:
                 smd = np.nan
 
@@ -12940,29 +12202,20 @@ def _(np, pd, roc_auc_score):
                 auc = np.nan
                 separation_auc = np.nan
 
-            rows.append({
-                "feature": feature,
-                f"{label}_n": len(feature_df),
-
-                f"{label}_mean_positive": mean_pos,
-                f"{label}_mean_negative": mean_neg,
-
-                f"{label}_median_positive": median_pos,
-                f"{label}_median_negative": median_neg,
-
-                f"{label}_smd": smd,
-                f"{label}_abs_smd": (
-                    abs(smd)
-                    if pd.notna(smd)
-                    else np.nan
-                ),
-
-                f"{label}_separation_auc":
-                    separation_auc,
-
-                f"{label}_missing_share":
-                    df[feature].isna().mean(),
-            })
+            rows.append(
+                {
+                    "feature": feature,
+                    f"{label}_n": len(feature_df),
+                    f"{label}_mean_positive": mean_pos,
+                    f"{label}_mean_negative": mean_neg,
+                    f"{label}_median_positive": median_pos,
+                    f"{label}_median_negative": median_neg,
+                    f"{label}_smd": smd,
+                    f"{label}_abs_smd": (abs(smd) if pd.notna(smd) else np.nan),
+                    f"{label}_separation_auc": separation_auc,
+                    f"{label}_missing_share": df[feature].isna().mean(),
+                }
+            )
 
         return pd.DataFrame(rows)
 
@@ -12978,42 +12231,26 @@ def _(driver_analysis, feature_target_separation, numeric_final_features):
     )
 
     drivers_separation = feature_target_separation(
-        driver_analysis.loc[
-            driver_analysis["IS_DRIVER"]
-        ],
+        driver_analysis.loc[driver_analysis["IS_DRIVER"]],
         numeric_final_features,
         "drivers",
     )
 
-    driver_feature_comparison = (
-        global_separation.merge(
-            drivers_separation,
-            on="feature",
-            how="inner",
-            validate="one_to_one",
-        )
+    driver_feature_comparison = global_separation.merge(
+        drivers_separation,
+        on="feature",
+        how="inner",
+        validate="one_to_one",
     )
 
-    driver_feature_comparison[
-        "separation_auc_delta"
-    ] = (
-        driver_feature_comparison[
-            "drivers_separation_auc"
-        ]
-        - driver_feature_comparison[
-            "global_separation_auc"
-        ]
+    driver_feature_comparison["separation_auc_delta"] = (
+        driver_feature_comparison["drivers_separation_auc"]
+        - driver_feature_comparison["global_separation_auc"]
     )
 
-    driver_feature_comparison[
-        "abs_smd_delta"
-    ] = (
-        driver_feature_comparison[
-            "drivers_abs_smd"
-        ]
-        - driver_feature_comparison[
-            "global_abs_smd"
-        ]
+    driver_feature_comparison["abs_smd_delta"] = (
+        driver_feature_comparison["drivers_abs_smd"]
+        - driver_feature_comparison["global_abs_smd"]
     )
     return driver_feature_comparison, drivers_separation, global_separation
 
@@ -13021,40 +12258,33 @@ def _(driver_analysis, feature_target_separation, numeric_final_features):
 @app.cell
 def _(driver_feature_comparison):
     driver_feature_comparison[
-            [
-                "feature",
-
-                "global_separation_auc",
-                "drivers_separation_auc",
-                "separation_auc_delta",
-
-                "global_abs_smd",
-                "drivers_abs_smd",
-                "abs_smd_delta",
-
-                "global_missing_share",
-                "drivers_missing_share",
-            ]
-        ].sort_values(
-            "separation_auc_delta"
-        ).head(25)
-    return
+        [
+            "feature",
+            "global_separation_auc",
+            "drivers_separation_auc",
+            "separation_auc_delta",
+            "global_abs_smd",
+            "drivers_abs_smd",
+            "abs_smd_delta",
+            "global_missing_share",
+            "drivers_missing_share",
+        ]
+    ].sort_values("separation_auc_delta").head(25)
 
 
 @app.cell
 def _(driver_feature_comparison):
     driver_feature_comparison[
-            [
-                "feature",
-                "global_separation_auc",
-                "drivers_separation_auc",
-                "separation_auc_delta",
-            ]
-        ].sort_values(
+        [
+            "feature",
+            "global_separation_auc",
+            "drivers_separation_auc",
             "separation_auc_delta",
-            ascending=False,
-        ).head(20)
-    return
+        ]
+    ].sort_values(
+        "separation_auc_delta",
+        ascending=False,
+    ).head(20)
 
 
 @app.cell(hide_code=True)
@@ -13062,7 +12292,6 @@ def _(mo):
     mo.md(r"""
     #### EA1.3.3 — Feature separation inside Sales staff
     """)
-    return
 
 
 @app.cell
@@ -13071,9 +12300,7 @@ def _(driver_analysis):
         driver_analysis["OCCUPATION_TYPE"] == "Sales staff"
     )
 
-    print(
-        driver_analysis["IS_SALES_STAFF"].sum()
-    )
+    print(driver_analysis["IS_SALES_STAFF"].sum())
 
     print(
         driver_analysis.loc[
@@ -13081,7 +12308,6 @@ def _(driver_analysis):
             "TARGET",
         ].sum()
     )
-    return
 
 
 @app.cell
@@ -13092,42 +12318,26 @@ def _(
     numeric_final_features,
 ):
     sales_separation = feature_target_separation(
-        driver_analysis.loc[
-            driver_analysis["IS_SALES_STAFF"]
-        ],
+        driver_analysis.loc[driver_analysis["IS_SALES_STAFF"]],
         numeric_final_features,
         "sales",
     )
 
-    sales_feature_comparison = (
-        global_separation.merge(
-            sales_separation,
-            on="feature",
-            how="inner",
-            validate="one_to_one",
-        )
+    sales_feature_comparison = global_separation.merge(
+        sales_separation,
+        on="feature",
+        how="inner",
+        validate="one_to_one",
     )
 
-    sales_feature_comparison[
-        "separation_auc_delta"
-    ] = (
-        sales_feature_comparison[
-            "sales_separation_auc"
-        ]
-        - sales_feature_comparison[
-            "global_separation_auc"
-        ]
+    sales_feature_comparison["separation_auc_delta"] = (
+        sales_feature_comparison["sales_separation_auc"]
+        - sales_feature_comparison["global_separation_auc"]
     )
 
-    sales_feature_comparison[
-        "abs_smd_delta"
-    ] = (
-        sales_feature_comparison[
-            "sales_abs_smd"
-        ]
-        - sales_feature_comparison[
-            "global_abs_smd"
-        ]
+    sales_feature_comparison["abs_smd_delta"] = (
+        sales_feature_comparison["sales_abs_smd"]
+        - sales_feature_comparison["global_abs_smd"]
     )
     return sales_feature_comparison, sales_separation
 
@@ -13138,27 +12348,21 @@ def _(sales_feature_comparison):
         sales_feature_comparison[
             [
                 "feature",
-
                 "global_separation_auc",
                 "sales_separation_auc",
                 "separation_auc_delta",
-
                 "global_abs_smd",
                 "sales_abs_smd",
                 "abs_smd_delta",
-
                 "global_missing_share",
                 "sales_missing_share",
             ]
         ]
-        .sort_values(
-            "separation_auc_delta"
-        )
+        .sort_values("separation_auc_delta")
         .head(25)
     )
 
     sales_lost_separation
-    return
 
 
 @app.cell
@@ -13180,7 +12384,6 @@ def _(sales_feature_comparison):
     )
 
     sales_gained_separation
-    return
 
 
 @app.cell
@@ -13214,26 +12417,14 @@ def _(drivers_separation, global_separation, sales_separation):
         )
     )
 
-    occupation_separation_comparison[
-        "drivers_delta"
-    ] = (
-        occupation_separation_comparison[
-            "drivers_separation_auc"
-        ]
-        - occupation_separation_comparison[
-            "global_separation_auc"
-        ]
+    occupation_separation_comparison["drivers_delta"] = (
+        occupation_separation_comparison["drivers_separation_auc"]
+        - occupation_separation_comparison["global_separation_auc"]
     )
 
-    occupation_separation_comparison[
-        "sales_delta"
-    ] = (
-        occupation_separation_comparison[
-            "sales_separation_auc"
-        ]
-        - occupation_separation_comparison[
-            "global_separation_auc"
-        ]
+    occupation_separation_comparison["sales_delta"] = (
+        occupation_separation_comparison["sales_separation_auc"]
+        - occupation_separation_comparison["global_separation_auc"]
     )
     return (occupation_separation_comparison,)
 
@@ -13242,30 +12433,14 @@ def _(drivers_separation, global_separation, sales_separation):
 def _(occupation_separation_comparison):
     common_degradation = (
         occupation_separation_comparison.loc[
-            (
-                occupation_separation_comparison[
-                    "drivers_delta"
-                ] < 0
-            )
-            &
-            (
-                occupation_separation_comparison[
-                    "sales_delta"
-                ] < 0
-            )
+            (occupation_separation_comparison["drivers_delta"] < 0)
+            & (occupation_separation_comparison["sales_delta"] < 0)
         ]
-        .assign(
-            mean_delta=lambda x: (
-                x["drivers_delta"]
-                + x["sales_delta"]
-            ) / 2
-        )
+        .assign(mean_delta=lambda x: (x["drivers_delta"] + x["sales_delta"]) / 2)
         .sort_values("mean_delta")
     )
 
-
     common_degradation.head(25)
-    return
 
 
 @app.cell(hide_code=True)
@@ -13273,15 +12448,12 @@ def _(mo):
     mo.md(r"""
     #### EA1.3.4 — Sales staff × credit-card history
     """)
-    return
 
 
 @app.cell
 def _(driver_analysis, training_dataset):
     driver_analysis_cc = driver_analysis.merge(
-        training_dataset[
-            ["SK_ID_CURR", "HAS_CREDIT_CARD_HISTORY"]
-        ],
+        training_dataset[["SK_ID_CURR", "HAS_CREDIT_CARD_HISTORY"]],
         on="SK_ID_CURR",
         how="left",
         validate="one_to_one",
@@ -13292,23 +12464,15 @@ def _(driver_analysis, training_dataset):
 @app.cell
 def _(driver_analysis_cc):
     driver_analysis_cc["HAS_CREDIT_CARD_HISTORY"] = (
-        driver_analysis_cc["HAS_CREDIT_CARD_HISTORY"]
-        .fillna(0)
-        .astype(bool)
+        driver_analysis_cc["HAS_CREDIT_CARD_HISTORY"].fillna(0).astype(bool)
     )
-    return
 
 
 @app.cell
 def _(driver_analysis_cc):
-    sales_df = driver_analysis_cc.loc[
-        driver_analysis_cc["IS_SALES_STAFF"]
-    ].copy()
+    sales_df = driver_analysis_cc.loc[driver_analysis_cc["IS_SALES_STAFF"]].copy()
 
-    print(
-        sales_df["HAS_CREDIT_CARD_HISTORY"]
-        .value_counts(normalize=True)
-    )
+    print(sales_df["HAS_CREDIT_CARD_HISTORY"].value_counts(normalize=True))
     return (sales_df,)
 
 
@@ -13326,10 +12490,7 @@ def _(average_precision_score, np, pd, roc_auc_score):
             n_positive = int(group["TARGET"].sum())
             prevalence = group["TARGET"].mean()
 
-            if (
-                group["TARGET"].nunique() == 2
-                and n_positive > 0
-            ):
+            if group["TARGET"].nunique() == 2 and n_positive > 0:
                 ap = average_precision_score(
                     group["TARGET"],
                     group[score_col],
@@ -13371,7 +12532,6 @@ def _(sales_df, subgroup_model_metrics):
     )
 
     sales_cc_performance
-    return
 
 
 @app.cell
@@ -13382,7 +12542,6 @@ def _(driver_analysis_cc, subgroup_model_metrics):
     )
 
     global_cc_performance
-    return
 
 
 @app.cell(hide_code=True)
@@ -13451,7 +12610,6 @@ def _(mo):
     CatBoost model, and the remaining performance gap appears to be driven partly by
     information availability rather than an obvious missing representation.
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -13459,7 +12617,6 @@ def _(mo):
     mo.md(r"""
     ### EA1.4 — Numeric cohort scan
     """)
-    return
 
 
 @app.cell
@@ -13473,9 +12630,7 @@ def _(oof_analysis, training_dataset):
     ]
 
     numeric_cohort_analysis = oof_analysis.merge(
-        training_dataset[
-            ["SK_ID_CURR"] + numeric_cohort_features
-        ],
+        training_dataset[["SK_ID_CURR"] + numeric_cohort_features],
         on="SK_ID_CURR",
         how="left",
         validate="one_to_one",
@@ -13491,7 +12646,6 @@ def _(numeric_cohort_analysis, numeric_cohort_features, pd):
             q=5,
             duplicates="drop",
         )
-    return
 
 
 @app.cell
@@ -13521,19 +12675,18 @@ def _(average_precision_score, pd, roc_auc_score):
                 group[score_col],
             )
 
-            rows.append({
-                "feature": feature,
-                "cohort": str(cohort),
-
-                "n": len(group),
-                "n_positive": int(group["TARGET"].sum()),
-
-                "prevalence": prevalence,
-                "ap": ap,
-                "ap_lift": ap / prevalence,
-
-                "roc_auc": auc,
-            })
+            rows.append(
+                {
+                    "feature": feature,
+                    "cohort": str(cohort),
+                    "n": len(group),
+                    "n_positive": int(group["TARGET"].sum()),
+                    "prevalence": prevalence,
+                    "ap": ap,
+                    "ap_lift": ap / prevalence,
+                    "roc_auc": auc,
+                }
+            )
 
         return pd.DataFrame(rows)
 
@@ -13561,23 +12714,18 @@ def _(
     )
 
     numeric_cohort_results["auc_delta_vs_global"] = (
-        numeric_cohort_results["roc_auc"]
-        - global_auc
+        numeric_cohort_results["roc_auc"] - global_auc
     )
 
     numeric_cohort_results["ap_lift_ratio_vs_global"] = (
-        numeric_cohort_results["ap_lift"]
-        / global_ap_lift
+        numeric_cohort_results["ap_lift"] / global_ap_lift
     )
     return (numeric_cohort_results,)
 
 
 @app.cell
 def _(numeric_cohort_results):
-    numeric_cohort_results.sort_values(
-            "auc_delta_vs_global"
-        )
-    return
+    numeric_cohort_results.sort_values("auc_delta_vs_global")
 
 
 @app.cell(hide_code=True)
@@ -13609,7 +12757,6 @@ def _(mo):
 
     No additional feature bundle is introduced based on the error-analysis diagnostics. The internal holdout remains untouched.
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -13627,7 +12774,6 @@ def _(mo):
     - Optimization track: Primary: Validation AP. Leaderboard track: ROC-AUC. Policy track: Precision/Recall@Top10%;
     - Internal holdout: Untouched.
     """)
-    return
 
 
 @app.cell
@@ -13642,9 +12788,7 @@ def _(average_precision_score, log_loss, np, roc_auc_score):
 
         n_top = int(len(y_true) * capacity)
 
-        top_idx = np.argsort(
-            y_pred
-        )[::-1][:n_top]
+        top_idx = np.argsort(y_pred)[::-1][:n_top]
 
         top_y = y_true[top_idx]
 
@@ -13661,13 +12805,8 @@ def _(average_precision_score, log_loss, np, roc_auc_score):
                 y_true,
                 y_pred,
             ),
-            "precision_at_10pct": (
-                top_y.mean()
-            ),
-            "recall_at_10pct": (
-                top_y.sum()
-                / y_true.sum()
-            ),
+            "precision_at_10pct": (top_y.mean()),
+            "recall_at_10pct": (top_y.sum() / y_true.sum()),
         }
 
     return (evaluate_predictions,)
@@ -13698,23 +12837,14 @@ def _(evaluate_predictions, lgb, np, pd):
             X_valid = X.loc[valid_mask]
             y_valid = y.loc[valid_mask]
 
-            model = lgb.LGBMClassifier(
-                **params
-            )
+            model = lgb.LGBMClassifier(**params)
 
             model.fit(
                 X_train,
                 y_train,
-
-                eval_set=[
-                    (X_valid, y_valid)
-                ],
-
+                eval_set=[(X_valid, y_valid)],
                 eval_metric="auc",
-
-                categorical_feature=
-                    categorical_features,
-
+                categorical_feature=categorical_features,
                 callbacks=[
                     lgb.early_stopping(
                         200,
@@ -13737,9 +12867,7 @@ def _(evaluate_predictions, lgb, np, pd):
             )
 
             metrics["fold"] = fold
-            metrics["best_iteration"] = (
-                model.best_iteration_
-            )
+            metrics["best_iteration"] = model.best_iteration_
 
             fold_results.append(metrics)
             models.append(model)
@@ -13758,7 +12886,6 @@ def _(evaluate_predictions, lgb, np, pd):
 @app.cell
 def _(FINAL_FEATURES):
     assert len(FINAL_FEATURES) == 148
-    return
 
 
 @app.cell
@@ -13766,9 +12893,7 @@ def _(training_dataset):
     dev_model = training_dataset.copy()
 
     dev_model = (
-        dev_model.loc[
-            dev_model["partition"] == "development"
-        ]
+        dev_model.loc[dev_model["partition"] == "development"]
         .copy()
         .reset_index(drop=True)
     )
@@ -13784,47 +12909,35 @@ def _(FINAL_FEATURES, dev_model):
     X = dev_model[FINAL_FEATURES].copy()
     y = dev_model["TARGET"].copy()
 
-    categorical_features_lgbm = (
-        X.select_dtypes(
-            include=["object", "category"]
-        )
-        .columns
-        .tolist()
-    )
+    categorical_features_lgbm = X.select_dtypes(
+        include=["object", "category"]
+    ).columns.tolist()
 
     for col in categorical_features_lgbm:
         X[col] = X[col].astype("category")
 
     print("Features:", X.shape[1])
     print("Categorical:", len(categorical_features_lgbm))
-    return
 
 
 @app.cell
 def _():
     lgbm_params = {
         "objective": "binary",
-
         "n_estimators": 5000,
         "learning_rate": 0.03,
-
         "num_leaves": 31,
         "max_depth": -1,
         "min_child_samples": 20,
-
         "subsample": 0.8,
         "subsample_freq": 1,
         "colsample_bytree": 0.8,
-
         "reg_alpha": 0.0,
         "reg_lambda": 1.0,
-
         "random_state": 42,
         "n_jobs": -1,
-
         "verbosity": -1,
     }
-    return
 
 
 @app.cell
@@ -13877,31 +12990,21 @@ def _():
 def _():
     xgb_params = {
         "objective": "binary:logistic",
-
         "n_estimators": 5000,
         "learning_rate": 0.03,
-
         "max_depth": 6,
         "min_child_weight": 1,
-
         "subsample": 0.8,
         "colsample_bytree": 0.8,
-
         "reg_alpha": 0.0,
         "reg_lambda": 1.0,
-
         "tree_method": "hist",
         "device": "cuda",
-
         "enable_categorical": True,
-
         "eval_metric": "auc",
-
         "random_state": 42,
-
         "early_stopping_rounds": 200,
     }
-    return
 
 
 @app.cell
@@ -13928,24 +13031,16 @@ def _(evaluate_predictions, np, pd, xgb):
             X_valid = X.loc[valid_mask]
             y_valid = y.loc[valid_mask]
 
-            model = xgb.XGBClassifier(
-                **params
-            )
+            model = xgb.XGBClassifier(**params)
 
             model.fit(
                 X_train,
                 y_train,
-
-                eval_set=[
-                    (X_valid, y_valid)
-                ],
-
+                eval_set=[(X_valid, y_valid)],
                 verbose=200,
             )
 
-            pred = model.predict_proba(
-                X_valid
-            )[:, 1]
+            pred = model.predict_proba(X_valid)[:, 1]
 
             oof[valid_mask] = pred
 
@@ -13955,9 +13050,7 @@ def _(evaluate_predictions, np, pd, xgb):
             )
 
             metrics["fold"] = fold
-            metrics["best_iteration"] = (
-                model.best_iteration
-            )
+            metrics["best_iteration"] = model.best_iteration
 
             fold_results.append(metrics)
             models.append(model)
@@ -14399,7 +13492,6 @@ def _(mo):
     ROC-AUC ensemble advantage is small relative to the additional serving
     complexity of maintaining three separate models.
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -14512,7 +13604,6 @@ def _(mo):
     Small mixed-fold improvements are not sufficient because GPU CatBoost
     variability is already known to be non-negligible.
     """)
-    return
 
 
 @app.cell
@@ -14523,36 +13614,46 @@ def _(pd):
 
 @app.cell
 def _(pd):
-    t29_fold_metrics = pd.read_parquet("mlartifacts\\1\\5665cc4f67844ea79c909b9951c593c1\\artifacts\\metrics\\fold_metrics.parquet")
-    return
+    t29_fold_metrics = pd.read_parquet(
+        "mlartifacts\\1\\5665cc4f67844ea79c909b9951c593c1\\artifacts\\metrics\\fold_metrics.parquet"
+    )
 
 
 @app.cell
 def _():
-    IPX_FEATURES = ['IPX_N_CONTRACTS', 'IPX_MEAN_CONTRACT_LATE_SHARE',
-           'IPX_MAX_CONTRACT_LATE_SHARE', 'IPX_STD_CONTRACT_LATE_SHARE',
-           'IPX_MEAN_CONTRACT_LATE30_SHARE', 'IPX_MAX_CONTRACT_LATE30_SHARE',
-           'IPX_MEAN_CONTRACT_MAX_DAYS_LATE', 'IPX_WORST_CONTRACT_DAYS_LATE',
-           'IPX_MEAN_CONTRACT_PAYMENT_RATIO', 'IPX_MIN_CONTRACT_PAYMENT_RATIO',
-           'IPX_MEAN_CONTRACT_UNDERPAID_SHARE', 'IPX_MAX_CONTRACT_UNDERPAID_SHARE',
-           'IPX_BAD_CONTRACT_SHARE', 'IPX_LATEST_IPX_CONTRACT_LATE_SHARE',
-           'IPX_LATEST_IPX_CONTRACT_LATE_30D_SHARE',
-           'IPX_LATEST_IPX_CONTRACT_MAX_DAYS_LATE',
-           'IPX_LATEST_IPX_CONTRACT_UNDERPAID_SHARE',
-           'IPX_WEIGHTED_IPX_CONTRACT_LATE_SHARE',
-           'IPX_WEIGHTED_IPX_CONTRACT_LATE_30D_SHARE',
-           'IPX_WEIGHTED_IPX_CONTRACT_UNDERPAID_SHARE']
+    IPX_FEATURES = [
+        "IPX_N_CONTRACTS",
+        "IPX_MEAN_CONTRACT_LATE_SHARE",
+        "IPX_MAX_CONTRACT_LATE_SHARE",
+        "IPX_STD_CONTRACT_LATE_SHARE",
+        "IPX_MEAN_CONTRACT_LATE30_SHARE",
+        "IPX_MAX_CONTRACT_LATE30_SHARE",
+        "IPX_MEAN_CONTRACT_MAX_DAYS_LATE",
+        "IPX_WORST_CONTRACT_DAYS_LATE",
+        "IPX_MEAN_CONTRACT_PAYMENT_RATIO",
+        "IPX_MIN_CONTRACT_PAYMENT_RATIO",
+        "IPX_MEAN_CONTRACT_UNDERPAID_SHARE",
+        "IPX_MAX_CONTRACT_UNDERPAID_SHARE",
+        "IPX_BAD_CONTRACT_SHARE",
+        "IPX_LATEST_IPX_CONTRACT_LATE_SHARE",
+        "IPX_LATEST_IPX_CONTRACT_LATE_30D_SHARE",
+        "IPX_LATEST_IPX_CONTRACT_MAX_DAYS_LATE",
+        "IPX_LATEST_IPX_CONTRACT_UNDERPAID_SHARE",
+        "IPX_WEIGHTED_IPX_CONTRACT_LATE_SHARE",
+        "IPX_WEIGHTED_IPX_CONTRACT_LATE_30D_SHARE",
+        "IPX_WEIGHTED_IPX_CONTRACT_UNDERPAID_SHARE",
+    ]
     return (IPX_FEATURES,)
 
 
 @app.cell
 def _(BASELINE_PARAMS, FINAL_FEATURES, IPX_FEATURES, T1_BEST_PARAMS):
-    f8_features = (FINAL_FEATURES + IPX_FEATURES)
+    f8_features = FINAL_FEATURES + IPX_FEATURES
 
     tuned_params = {
-            **BASELINE_PARAMS,
-            **T1_BEST_PARAMS,
-        }
+        **BASELINE_PARAMS,
+        **T1_BEST_PARAMS,
+    }
     return (tuned_params,)
 
 
@@ -14622,7 +13723,6 @@ def _(mo):
     The F8 feature bundle is not included in the final feature representation.
     No further installments feature engineering is performed.
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -14760,23 +13860,35 @@ def _(mo):
     If improvement is negligible or fold consistency is weak, both sources are
     rejected and no further POS / bureau_balance feature search is performed.
     """)
-    return
 
 
 @app.cell
 def _(FINAL_FEATURES):
-    POSX_FEATURES = ['POSX_MEAN_LATEST_DPD', 'POSX_MAX_LATEST_DPD',
-           'POSX_BAD_LATEST_SHARE', 'POSX_MEAN_RECENT6_DPD_SHARE',
-           'POSX_MAX_RECENT6_DPD_SHARE', 'POSX_MEAN_RECENT_WORSENING',
-           'POSX_MAX_RECENT_WORSENING', 'POSX_MEAN_PROGRESS', 'POSX_MIN_PROGRESS']
+    POSX_FEATURES = [
+        "POSX_MEAN_LATEST_DPD",
+        "POSX_MAX_LATEST_DPD",
+        "POSX_BAD_LATEST_SHARE",
+        "POSX_MEAN_RECENT6_DPD_SHARE",
+        "POSX_MAX_RECENT6_DPD_SHARE",
+        "POSX_MEAN_RECENT_WORSENING",
+        "POSX_MAX_RECENT_WORSENING",
+        "POSX_MEAN_PROGRESS",
+        "POSX_MIN_PROGRESS",
+    ]
 
-    BBX_FEATURES = ['BBX_RECENT_DELINQUENT_ACCOUNT_SHARE',
-           'BBX_MEAN_RECENT6_DELINQ_SHARE', 'BBX_MAX_RECENT6_DELINQ_SHARE',
-           'BBX_MEAN_RECENT12_DELINQ_SHARE', 'BBX_MAX_SEVERITY',
-           'BBX_MAX_RECENT6_SEVERITY', 'BBX_MIN_MONTHS_SINCE_DELINQUENCY',
-           'BBX_MEAN_RECENT_WORSENING', 'BBX_MAX_RECENT_WORSENING']
+    BBX_FEATURES = [
+        "BBX_RECENT_DELINQUENT_ACCOUNT_SHARE",
+        "BBX_MEAN_RECENT6_DELINQ_SHARE",
+        "BBX_MAX_RECENT6_DELINQ_SHARE",
+        "BBX_MEAN_RECENT12_DELINQ_SHARE",
+        "BBX_MAX_SEVERITY",
+        "BBX_MAX_RECENT6_SEVERITY",
+        "BBX_MIN_MONTHS_SINCE_DELINQUENCY",
+        "BBX_MEAN_RECENT_WORSENING",
+        "BBX_MAX_RECENT_WORSENING",
+    ]
 
-    f9_features = (FINAL_FEATURES + POSX_FEATURES + BBX_FEATURES)
+    f9_features = FINAL_FEATURES + POSX_FEATURES + BBX_FEATURES
     return BBX_FEATURES, POSX_FEATURES, f9_features
 
 
@@ -14868,12 +13980,11 @@ def _(mo):
 
     No further feature-engineering search is performed.
     """)
-    return
 
 
 @app.cell
 def _(BBX_FEATURES, FINAL_FEATURES, POSX_FEATURES):
-    ACCEPTED_FINAL_FEATURES = FINAL_FEATURES  + POSX_FEATURES + BBX_FEATURES
+    ACCEPTED_FINAL_FEATURES = FINAL_FEATURES + POSX_FEATURES + BBX_FEATURES
     return (ACCEPTED_FINAL_FEATURES,)
 
 
@@ -14883,7 +13994,6 @@ def _(BBX_FEATURES, FINAL_FEATURES, POSX_FEATURES, f9_features):
     print("POSX features:", len(POSX_FEATURES))
     print("BBX features:", len(BBX_FEATURES))
     print("F9 total features:", len(f9_features))
-    return
 
 
 @app.cell(hide_code=True)
@@ -14917,15 +14027,12 @@ def _(mo):
     | `bureau_balance` (BBX) | Monthly bureau delinquency transitions | 9 | Maximum status severity, recent 6M/12M delinquency rates |
     | **Total** | | **166** | Complete multi-table borrower risk representation |
     """)
-    return
 
 
 @app.cell
 def _(final_training_dataset):
     dev_f9 = (
-        final_training_dataset.loc[
-            final_training_dataset["partition"] == "development"
-        ]
+        final_training_dataset.loc[final_training_dataset["partition"] == "development"]
         .copy()
         .reset_index(drop=True)
     )
@@ -14942,14 +14049,9 @@ def _(dev_f9, f9_features):
     y_f9 = dev_f9["TARGET"].copy()
     folds_f9 = dev_f9["fold"].copy()
 
-    categorical_features_f9 = (
-        X_f9
-        .select_dtypes(
-            include=["object", "category"]
-        )
-        .columns
-        .tolist()
-    )
+    categorical_features_f9 = X_f9.select_dtypes(
+        include=["object", "category"]
+    ).columns.tolist()
 
     for categ_col in categorical_features_f9:
         X_f9[categ_col] = X_f9[categ_col].astype("category")
@@ -15072,7 +14174,6 @@ def _():
     #     models_f9_oof
     # )
 
-
     # prediction_comparison_f9.corr()
     return
 
@@ -15170,7 +14271,6 @@ def _():
         "lightgbm": 0.24,
         "xgboost": 0.17,
     }
-    return
 
 
 @app.cell(hide_code=True)
@@ -15188,7 +14288,6 @@ def _(mo):
     - **Storage backend**: Persistent SQLite database (`sqlite:///optuna.db`) for reproducible, resumable trial history;
     - **Strict holdout discipline**: The 15% internal holdout remains completely untouched.
     """)
-    return
 
 
 @app.cell
@@ -15197,60 +14296,50 @@ def _(X_f9, categorical_features_f9, folds_f9, run_lgbm_cv, y_f9):
         params = {
             "objective": "binary",
             "n_estimators": 5000,
-
             "learning_rate": trial.suggest_float(
                 "learning_rate",
                 0.01,
                 0.05,
                 log=True,
             ),
-
             "num_leaves": trial.suggest_int(
                 "num_leaves",
                 20,
                 80,
             ),
-
             "max_depth": trial.suggest_int(
                 "max_depth",
                 4,
                 10,
             ),
-
             "min_child_samples": trial.suggest_int(
                 "min_child_samples",
                 20,
                 150,
             ),
-
             "subsample": trial.suggest_float(
                 "subsample",
                 0.7,
                 1.0,
             ),
-
             "subsample_freq": 1,
-
             "colsample_bytree": trial.suggest_float(
                 "colsample_bytree",
                 0.7,
                 1.0,
             ),
-
             "reg_alpha": trial.suggest_float(
                 "reg_alpha",
                 1e-3,
                 10.0,
                 log=True,
             ),
-
             "reg_lambda": trial.suggest_float(
                 "reg_lambda",
                 1e-3,
                 20.0,
                 log=True,
             ),
-
             "random_state": 42,
             "n_jobs": -1,
             "verbosity": -1,
@@ -15275,66 +14364,55 @@ def _(X_f9, folds_f9, run_xgb_cv, y_f9):
         params = {
             "objective": "binary:logistic",
             "n_estimators": 5000,
-
             "learning_rate": trial.suggest_float(
                 "learning_rate",
                 0.01,
                 0.05,
                 log=True,
             ),
-
             "max_depth": trial.suggest_int(
                 "max_depth",
                 4,
                 8,
             ),
-
             "min_child_weight": trial.suggest_float(
                 "min_child_weight",
                 1.0,
                 20.0,
                 log=True,
             ),
-
             "subsample": trial.suggest_float(
                 "subsample",
                 0.7,
                 1.0,
             ),
-
             "colsample_bytree": trial.suggest_float(
                 "colsample_bytree",
                 0.7,
                 1.0,
             ),
-
             "gamma": trial.suggest_float(
                 "gamma",
                 1e-4,
                 5.0,
                 log=True,
             ),
-
             "reg_alpha": trial.suggest_float(
                 "reg_alpha",
                 1e-4,
                 10.0,
                 log=True,
             ),
-
             "reg_lambda": trial.suggest_float(
                 "reg_lambda",
                 1e-3,
                 20.0,
                 log=True,
             ),
-
             "tree_method": "hist",
             "device": "cuda",
             "enable_categorical": True,
-
             "eval_metric": "auc",
-
             "random_state": 42,
             "early_stopping_rounds": 200,
         }
@@ -15385,7 +14463,6 @@ def _(study_lgbm):
         print("  Params:")
         for key, value in best_trial_lgbm.params.items():
             print(f"    {key}: {value}")
-    return
 
 
 @app.cell
@@ -15416,7 +14493,6 @@ def _(study_xgb):
         print("  Params:")
         for param, param_value in best_trial_xgb.params.items():
             print(f"    {param}: {param_value}")
-    return
 
 
 @app.cell(hide_code=True)
@@ -15425,7 +14501,6 @@ def _(mo):
     ### Standardized MLflow CV Experiment Runner
     Define a generic cross-validation runner to evaluate candidate models under the fixed protocol, logging fold metrics, OOF predictions, feature schemas, and parameter artifacts to MLflow.
     """)
-    return
 
 
 @app.cell
@@ -15452,19 +14527,18 @@ def _(Path, evaluate_predictions, json, mlflow, pd, tempfile):
             models
         """
 
-        with mlflow.start_run(
-            run_name=run_name
-        ) as run:
-
+        with mlflow.start_run(run_name=run_name) as run:
             # -------------------------
             # Tags
             # -------------------------
 
-            mlflow.set_tags({
-                "model": model_name,
-                "run_type": "cv_experiment",
-                **(tags or {}),
-            })
+            mlflow.set_tags(
+                {
+                    "model": model_name,
+                    "run_type": "cv_experiment",
+                    **(tags or {}),
+                }
+            )
 
             # -------------------------
             # Parameters
@@ -15514,20 +14588,15 @@ def _(Path, evaluate_predictions, json, mlflow, pd, tempfile):
                 y_pred=oof_predictions,
             )
 
-            mlflow.log_metrics({
-                f"oof_{key}": value
-                for key, value
-                in oof_metrics.items()
-            })
+            mlflow.log_metrics(
+                {f"oof_{key}": value for key, value in oof_metrics.items()}
+            )
 
             # -------------------------
             # Fold summary
             # -------------------------
 
-            numeric_fold_metrics = (
-                fold_metrics
-                .select_dtypes(include="number")
-            )
+            numeric_fold_metrics = fold_metrics.select_dtypes(include="number")
 
             for metric in [
                 "ap",
@@ -15553,35 +14622,25 @@ def _(Path, evaluate_predictions, json, mlflow, pd, tempfile):
             # Artifacts
             # -------------------------
 
-            oof_df = pd.DataFrame({
-                "SK_ID_CURR": ids.to_numpy(),
-                "TARGET": target.to_numpy(),
-                "fold": folds.to_numpy(),
-                "probability": oof_predictions,
-            })
+            oof_df = pd.DataFrame(
+                {
+                    "SK_ID_CURR": ids.to_numpy(),
+                    "TARGET": target.to_numpy(),
+                    "fold": folds.to_numpy(),
+                    "probability": oof_predictions,
+                }
+            )
 
             with tempfile.TemporaryDirectory() as temp_dir:
                 temp_dir = Path(temp_dir)
 
-                oof_path = (
-                    temp_dir
-                    / "oof_predictions.parquet"
-                )
+                oof_path = temp_dir / "oof_predictions.parquet"
 
-                folds_path = (
-                    temp_dir
-                    / "fold_metrics.csv"
-                )
+                folds_path = temp_dir / "fold_metrics.csv"
 
-                features_path = (
-                    temp_dir
-                    / "features.json"
-                )
+                features_path = temp_dir / "features.json"
 
-                params_path = (
-                    temp_dir
-                    / "resolved_params.json"
-                )
+                params_path = temp_dir / "resolved_params.json"
 
                 oof_df.to_parquet(
                     oof_path,
@@ -15646,11 +14705,8 @@ def _(study_lgbm):
     lgbm_tuned_params = {
         "objective": "binary",
         "n_estimators": 5000,
-
         **study_lgbm.best_params,
-
         "subsample_freq": 1,
-
         "random_state": 42,
         "n_jobs": -1,
         "verbosity": -1,
@@ -15672,38 +14728,25 @@ def _(
 ):
     lgbm_tuned_run = run_model_experiment(
         run_name="lgbm_f9_tuned_v1",
-
         model_name="lightgbm",
-
         cv_runner=run_lgbm_cv,
-
         cv_runner_kwargs={
             "X": X_f9,
             "y": y_f9,
             "folds": folds_f9,
-            "categorical_features":
-                categorical_features_f9,
+            "categorical_features": categorical_features_f9,
         },
-
         params=lgbm_tuned_params,
-
         feature_names=f9_features,
-
         ids=dev_f9["SK_ID_CURR"],
         target=y_f9,
         folds=folds_f9,
-
         tags={
-            "dataset_version":
-                "development_v1",
-            "split_version":
-                "split_v1",
-            "feature_version":
-                "rfe2_f9",
-            "tuning":
-                "optuna",
-            "optuna_study":
-                "lgbm_f9_auc_v1",
+            "dataset_version": "development_v1",
+            "split_version": "split_v1",
+            "feature_version": "rfe2_f9",
+            "tuning": "optuna",
+            "optuna_study": "lgbm_f9_auc_v1",
         },
     )
     return (lgbm_tuned_run,)
@@ -15714,15 +14757,11 @@ def _(study_xgb):
     xgb_tuned_params = {
         "objective": "binary:logistic",
         "n_estimators": 5000,
-
         **study_xgb.best_params,
-
         "tree_method": "hist",
         "device": "cuda",
         "enable_categorical": True,
-
         "eval_metric": "auc",
-
         "random_state": 42,
         "early_stopping_rounds": 200,
     }
@@ -15742,36 +14781,24 @@ def _(
 ):
     xgb_tuned_run = run_model_experiment(
         run_name="xgb_f9_tuned_v1",
-
         model_name="xgboost",
-
         cv_runner=run_xgb_cv,
-
         cv_runner_kwargs={
             "X": X_f9,
             "y": y_f9,
             "folds": folds_f9,
         },
-
         params=xgb_tuned_params,
-
         feature_names=f9_features,
-
         ids=dev_f9["SK_ID_CURR"],
         target=y_f9,
         folds=folds_f9,
-
         tags={
-            "dataset_version":
-                "development_v1",
-            "split_version":
-                "split_v1",
-            "feature_version":
-                "rfe2_f9",
-            "tuning":
-                "optuna",
-            "optuna_study":
-                "xgb_f9_auc_v1",
+            "dataset_version": "development_v1",
+            "split_version": "split_v1",
+            "feature_version": "rfe2_f9",
+            "tuning": "optuna",
+            "optuna_study": "xgb_f9_auc_v1",
         },
     )
     return (xgb_tuned_run,)
@@ -15779,8 +14806,12 @@ def _(
 
 @app.cell
 def _(pd):
-    cb_f9_oof = pd.read_parquet("mlartifacts\\1\\235ba1f2b6dd4e8fb44b939cc9fe7ef6\\artifacts\\predictions\\oof_predictions.parquet")
-    cb_f9_fold_metrics = pd.read_parquet("mlartifacts\\1\\235ba1f2b6dd4e8fb44b939cc9fe7ef6\\artifacts\\metrics\\fold_metrics.parquet")
+    cb_f9_oof = pd.read_parquet(
+        "mlartifacts\\1\\235ba1f2b6dd4e8fb44b939cc9fe7ef6\\artifacts\\predictions\\oof_predictions.parquet"
+    )
+    cb_f9_fold_metrics = pd.read_parquet(
+        "mlartifacts\\1\\235ba1f2b6dd4e8fb44b939cc9fe7ef6\\artifacts\\metrics\\fold_metrics.parquet"
+    )
     return cb_f9_fold_metrics, cb_f9_oof
 
 
@@ -15792,7 +14823,6 @@ def _(cb_f9_fold_metrics, xgb_tuned_run):
         "valid_ap",
         "ap",
     )
-    return
 
 
 @app.cell
@@ -15803,7 +14833,6 @@ def _(cb_f9_fold_metrics, xgb_tuned_run):
         "roc_auc",
         "roc_auc",
     )
-    return
 
 
 @app.cell(hide_code=True)
@@ -15832,13 +14861,12 @@ def _(mo):
     ### Decision
     **ACCEPT** — Accept tuned LightGBM (`lgbm_tuned_params`) and tuned XGBoost (`xgb_tuned_params`) configurations for final ensemble evaluation. Hyperparameter tuning for alternative models is now complete and frozen.
     """)
-    return
 
 
 @app.cell
 def _(cb_f9_oof, lgbm_tuned_run, xgb_tuned_run):
     models_tuned_oof = {
-        "catboost": cb_f9_oof['probability'].to_numpy(),
+        "catboost": cb_f9_oof["probability"].to_numpy(),
         "lightgbm": lgbm_tuned_run["oof"]["probability"].to_numpy(),
         "xgboost": xgb_tuned_run["oof"]["probability"].to_numpy(),
     }
@@ -15856,7 +14884,6 @@ def _(dev_f9, lgbm_tuned_run, np, xgb_tuned_run):
         xgb_tuned_run["oof"]["SK_ID_CURR"].to_numpy(),
         dev_f9["SK_ID_CURR"].to_numpy(),
     )
-    return
 
 
 @app.cell(hide_code=True)
@@ -15865,16 +14892,11 @@ def _(mo):
     ### Grid Search over Ensemble Blend Weights
     Conduct a systematic grid search (step = 0.01) across convex combinations of out-of-fold probability predictions from the three tuned models to locate the empirical ROC-AUC / AP optimum.
     """)
-    return
 
 
 @app.cell
 def _(evaluate_predictions, models_tuned_oof, pd):
-    def blend_three_models(
-        pred,
-        y_true,
-        step: float = 0.01
-    ) -> pd.DataFrame:
+    def blend_three_models(pred, y_true, step: float = 0.01) -> pd.DataFrame:
         """
         Search of optimal weights
         """
@@ -15886,7 +14908,6 @@ def _(evaluate_predictions, models_tuned_oof, pd):
 
         for i in range(n_steps + 1):
             for j in range(n_steps + 1 - i):
-
                 w_cb = i * step
                 w_lgb = j * step
                 w_xgb = 1.0 - w_cb - w_lgb
@@ -15902,16 +14923,16 @@ def _(evaluate_predictions, models_tuned_oof, pd):
                     y_pred=pred,
                 )
 
-                blend_results_tuned.append({
-                    "w_catboost": w_cb,
-                    "w_lightgbm": w_lgb,
-                    "w_xgboost": w_xgb,
-                    **metrics,
-                })
+                blend_results_tuned.append(
+                    {
+                        "w_catboost": w_cb,
+                        "w_lightgbm": w_lgb,
+                        "w_xgboost": w_xgb,
+                        **metrics,
+                    }
+                )
 
-        blend_results_tuned = pd.DataFrame(
-            blend_results_tuned
-        )
+        blend_results_tuned = pd.DataFrame(blend_results_tuned)
 
         return blend_results_tuned
 
@@ -15920,24 +14941,26 @@ def _(evaluate_predictions, models_tuned_oof, pd):
 
 @app.cell
 def _(blend_three_models, models_tuned_oof, y_f9):
-    blend_result_tuned = blend_three_models(
-        pred=models_tuned_oof,
-        y_true=y_f9,
-        step=0.01,
-    ).sort_values("roc_auc", ascending=False).head(15)
+    blend_result_tuned = (
+        blend_three_models(
+            pred=models_tuned_oof,
+            y_true=y_f9,
+            step=0.01,
+        )
+        .sort_values("roc_auc", ascending=False)
+        .head(15)
+    )
     return (blend_result_tuned,)
 
 
 @app.cell
 def _(blend_result_tuned):
     blend_result_tuned
-    return
 
 
 @app.cell
 def _(blend_result_tuned):
     blend_result_tuned.sort_values("ap", ascending=False).head(15)
-    return
 
 
 @app.cell
@@ -15947,7 +14970,6 @@ def _():
         "lightgbm": 0.28,
         "xgboost": 0.36,
     }
-    return
 
 
 @app.cell
@@ -15984,32 +15006,24 @@ def _(
             y_pred=final_blend_oof[mask_f9],
         )
 
-        final_fold_comparison.append({
-            "fold": fold_f9,
-            "delta_ap": (
-                ensemble_metrics["ap"]
-                - cb_metrics["ap"]
-            ),
-            "delta_auc": (
-                ensemble_metrics["roc_auc"]
-                - cb_metrics["roc_auc"]
-            ),
-            "delta_precision10": (
-                ensemble_metrics["precision_at_10pct"]
-                - cb_metrics["precision_at_10pct"]
-            ),
-            "delta_recall10": (
-                ensemble_metrics["recall_at_10pct"]
-                - cb_metrics["recall_at_10pct"]
-            ),
-        })
+        final_fold_comparison.append(
+            {
+                "fold": fold_f9,
+                "delta_ap": (ensemble_metrics["ap"] - cb_metrics["ap"]),
+                "delta_auc": (ensemble_metrics["roc_auc"] - cb_metrics["roc_auc"]),
+                "delta_precision10": (
+                    ensemble_metrics["precision_at_10pct"]
+                    - cb_metrics["precision_at_10pct"]
+                ),
+                "delta_recall10": (
+                    ensemble_metrics["recall_at_10pct"] - cb_metrics["recall_at_10pct"]
+                ),
+            }
+        )
 
-    final_fold_comparison = pd.DataFrame(
-        final_fold_comparison
-    )
+    final_fold_comparison = pd.DataFrame(final_fold_comparison)
 
     final_fold_comparison
-    return
 
 
 @app.cell(hide_code=True)
@@ -16051,7 +15065,6 @@ def _(mo):
 
     The frozen specification is now submitted to the untouched 15% holdout set for final unbiased verification.
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -16060,7 +15073,6 @@ def _(mo):
     ### Development Set Refit & Standalone Holdout Scoring
     Train each tuned model on the entire development split (261,384 rows) up to its median best iteration from 5-fold cross-validation, then generate probability predictions on the untouched 15% holdout partition (46,127 rows).
     """)
-    return
 
 
 @app.cell
@@ -16075,19 +15087,9 @@ def _(lgbm_tuned_params, tuned_params, xgb_tuned_params):
 def _(final_training_dataset):
     full_split_data = final_training_dataset.copy()
 
-    dev_final = (
-        full_split_data[
-            full_split_data["partition"] == "development"
-        ]
-        .copy()
-    )
+    dev_final = full_split_data[full_split_data["partition"] == "development"].copy()
 
-    holdout_final = (
-        full_split_data[
-            full_split_data["partition"] == "holdout"
-        ]
-        .copy()
-    )
+    holdout_final = full_split_data[full_split_data["partition"] == "holdout"].copy()
 
     print(dev_final.shape)
     print(holdout_final.shape)
@@ -16096,23 +15098,13 @@ def _(final_training_dataset):
 
 @app.cell
 def _(cb_f9_fold_metrics, lgbm_tuned_run, np, xgb_tuned_run):
-    cb_best_iteration = int(
-        np.median(
-            cb_f9_fold_metrics["best_iteration"]
-        )
-    )
+    cb_best_iteration = int(np.median(cb_f9_fold_metrics["best_iteration"]))
 
     lgbm_best_iteration = int(
-        np.median(
-            lgbm_tuned_run["fold_metrics"]["best_iteration"]
-        )
+        np.median(lgbm_tuned_run["fold_metrics"]["best_iteration"])
     )
 
-    xgb_best_iteration = int(
-        np.median(
-            xgb_tuned_run["fold_metrics"]["best_iteration"]
-        )
-    )
+    xgb_best_iteration = int(np.median(xgb_tuned_run["fold_metrics"]["best_iteration"]))
 
     print(
         cb_best_iteration,
@@ -16130,15 +15122,7 @@ def _(ACCEPTED_FINAL_FEATURES, dev_final, holdout_final):
     X_holdout = holdout_final[ACCEPTED_FINAL_FEATURES].copy()
     y_holdout = holdout_final["TARGET"].copy()
 
-
-    cat_cols = (
-        X_dev
-        .select_dtypes(
-            include=["object", "category"]
-        )
-        .columns
-        .tolist()
-    )
+    cat_cols = X_dev.select_dtypes(include=["object", "category"]).columns.tolist()
 
     for cb_cat_col in cat_cols:
         X_dev[cb_cat_col] = X_dev[cb_cat_col].astype(str)
@@ -16165,9 +15149,7 @@ def _(
         None,
     )
 
-    cb_final_dev = CatBoostClassifier(
-        **cb_holdout_params
-    )
+    cb_final_dev = CatBoostClassifier(**cb_holdout_params)
 
     cb_final_dev.fit(
         X_dev,
@@ -16176,32 +15158,20 @@ def _(
         verbose=200,
     )
 
-    cb_holdout_pred = (
-        cb_final_dev.predict_proba(
-            X_holdout
-        )[:, 1]
-    )
+    cb_holdout_pred = cb_final_dev.predict_proba(X_holdout)[:, 1]
     return cb_holdout_params, cb_holdout_pred
 
 
 @app.cell
 def _(ACCEPTED_FINAL_FEATURES, cat_cols, dev_final, holdout_final):
-    X_dev_lgb = dev_final[
-        ACCEPTED_FINAL_FEATURES
-    ].copy()
+    X_dev_lgb = dev_final[ACCEPTED_FINAL_FEATURES].copy()
 
-    X_holdout_lgb = holdout_final[
-        ACCEPTED_FINAL_FEATURES
-    ].copy()
+    X_holdout_lgb = holdout_final[ACCEPTED_FINAL_FEATURES].copy()
 
     for col_lgbm in cat_cols:
-        X_dev_lgb[col_lgbm] = (
-            X_dev_lgb[col_lgbm].astype("category")
-        )
+        X_dev_lgb[col_lgbm] = X_dev_lgb[col_lgbm].astype("category")
 
-        X_holdout_lgb[col_lgbm] = (
-            X_holdout_lgb[col_lgbm].astype("category")
-        )
+        X_holdout_lgb[col_lgbm] = X_holdout_lgb[col_lgbm].astype("category")
     return X_dev_lgb, X_holdout_lgb
 
 
@@ -16215,17 +15185,11 @@ def _(
     lgbm_best_iteration,
     y_dev,
 ):
-    lgbm_holdout_params = (
-        FINAL_LGBM_PARAMS.copy()
-    )
+    lgbm_holdout_params = FINAL_LGBM_PARAMS.copy()
 
-    lgbm_holdout_params[
-        "n_estimators"
-    ] = lgbm_best_iteration
+    lgbm_holdout_params["n_estimators"] = lgbm_best_iteration
 
-    lgbm_final_dev = lgb.LGBMClassifier(
-        **lgbm_holdout_params
-    )
+    lgbm_final_dev = lgb.LGBMClassifier(**lgbm_holdout_params)
 
     lgbm_final_dev.fit(
         X_dev_lgb,
@@ -16233,32 +15197,20 @@ def _(
         categorical_feature=cat_cols,
     )
 
-    lgbm_holdout_pred = (
-        lgbm_final_dev.predict_proba(
-            X_holdout_lgb
-        )[:, 1]
-    )
+    lgbm_holdout_pred = lgbm_final_dev.predict_proba(X_holdout_lgb)[:, 1]
     return lgbm_holdout_params, lgbm_holdout_pred
 
 
 @app.cell
 def _(ACCEPTED_FINAL_FEATURES, cat_cols, dev_final, holdout_final):
-    X_dev_xgb = dev_final[
-        ACCEPTED_FINAL_FEATURES
-    ].copy()
+    X_dev_xgb = dev_final[ACCEPTED_FINAL_FEATURES].copy()
 
-    X_holdout_xgb = holdout_final[
-        ACCEPTED_FINAL_FEATURES
-    ].copy()
+    X_holdout_xgb = holdout_final[ACCEPTED_FINAL_FEATURES].copy()
 
     for col_xgb in cat_cols:
-        X_dev_xgb[col_xgb] = (
-            X_dev_xgb[col_xgb].astype("category")
-        )
+        X_dev_xgb[col_xgb] = X_dev_xgb[col_xgb].astype("category")
 
-        X_holdout_xgb[col_xgb] = (
-            X_holdout_xgb[col_xgb].astype("category")
-        )
+        X_holdout_xgb[col_xgb] = X_holdout_xgb[col_xgb].astype("category")
     return X_dev_xgb, X_holdout_xgb
 
 
@@ -16271,42 +15223,30 @@ def _(
     xgb_best_iteration,
     y_dev,
 ):
-    xgb_holdout_params = (
-        FINAL_XGB_PARAMS.copy()
-    )
+    xgb_holdout_params = FINAL_XGB_PARAMS.copy()
 
-    xgb_holdout_params[
-        "n_estimators"
-    ] = xgb_best_iteration
+    xgb_holdout_params["n_estimators"] = xgb_best_iteration
 
     xgb_holdout_params.pop(
         "early_stopping_rounds",
         None,
     )
 
-    xgb_final_dev = xgb.XGBClassifier(
-        **xgb_holdout_params
-    )
+    xgb_final_dev = xgb.XGBClassifier(**xgb_holdout_params)
 
     xgb_final_dev.fit(
         X_dev_xgb,
         y_dev,
     )
 
-    xgb_holdout_pred = (
-        xgb_final_dev.predict_proba(
-            X_holdout_xgb
-        )[:, 1]
-    )
+    xgb_holdout_pred = xgb_final_dev.predict_proba(X_holdout_xgb)[:, 1]
     return xgb_holdout_params, xgb_holdout_pred
 
 
 @app.cell
 def _(cb_holdout_pred, lgbm_holdout_pred, xgb_holdout_pred):
     holdout_ensemble_pred = (
-        0.36 * cb_holdout_pred
-        + 0.28 * lgbm_holdout_pred
-        + 0.36 * xgb_holdout_pred
+        0.36 * cb_holdout_pred + 0.28 * lgbm_holdout_pred + 0.36 * xgb_holdout_pred
     )
     return (holdout_ensemble_pred,)
 
@@ -16326,27 +15266,21 @@ def _(
             y_holdout,
             cb_holdout_pred,
         ),
-
         "lightgbm": evaluate_predictions(
             y_holdout,
             lgbm_holdout_pred,
         ),
-
         "xgboost": evaluate_predictions(
             y_holdout,
             xgb_holdout_pred,
         ),
-
         "ensemble": evaluate_predictions(
             y_holdout,
             holdout_ensemble_pred,
         ),
     }
 
-    pd.DataFrame(
-        holdout_results
-    ).T
-    return
+    pd.DataFrame(holdout_results).T
 
 
 @app.cell(hide_code=True)
@@ -16374,7 +15308,6 @@ def _(mo):
 
     The frozen 3-model ensemble specification is validated and approved. The research process proceeds to full-dataset retraining and test-set submission generation.
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -16390,26 +15323,19 @@ def _(mo):
     - **Fixed Iteration Budgets**: Tree counts are set to the median best iterations established during the 5-fold cross-validation procedure (CatBoost: median best iteration, LightGBM: 1490, XGBoost: 1212), eliminating early stopping and avoiding validation-based selection during the refit;
     - **Deterministic Seeding**: `random_state = 42` is maintained across all three models.
     """)
-    return
 
 
 @app.cell
 def _(ACCEPTED_FINAL_FEATURES, final_training_dataset):
-    X_full = final_training_dataset[
-        ACCEPTED_FINAL_FEATURES
-    ].copy()
+    X_full = final_training_dataset[ACCEPTED_FINAL_FEATURES].copy()
 
-    y_full = final_training_dataset[
-        "TARGET"
-    ].copy()
+    y_full = final_training_dataset["TARGET"].copy()
     return X_full, y_full
 
 
 @app.cell
 def _(CatBoostClassifier, X_full, cat_cols, cb_holdout_params, y_full):
-    catboost_full = CatBoostClassifier(
-        **cb_holdout_params
-    )
+    catboost_full = CatBoostClassifier(**cb_holdout_params)
 
     catboost_full.fit(
         X_full,
@@ -16422,22 +15348,15 @@ def _(CatBoostClassifier, X_full, cat_cols, cb_holdout_params, y_full):
 
 @app.cell
 def _(X_full, xgb, xgb_holdout_params, y_full):
-    xgb_full = xgb.XGBClassifier(
-        **xgb_holdout_params
-    )
+    xgb_full = xgb.XGBClassifier(**xgb_holdout_params)
 
-    xgb_full.fit(
-        X_full,
-        y_full
-    )
+    xgb_full.fit(X_full, y_full)
     return (xgb_full,)
 
 
 @app.cell
 def _(X_full, cat_cols, lgb, lgbm_holdout_params, y_full):
-    lgbm_full = lgb.LGBMClassifier(
-        **lgbm_holdout_params
-    )
+    lgbm_full = lgb.LGBMClassifier(**lgbm_holdout_params)
     lgbm_full.fit(
         X_full,
         y_full,
@@ -16451,7 +15370,6 @@ def _(catboost_full, lgbm_full, xgb_full):
     catboost_full.save_model("artifacts/catboost_full_model.cbm")
     xgb_full.save_model("artifacts/xgboost_full_model.json")
     lgbm_full.booster_.save_model("artifacts/lightgbm_full_model.txt")
-    return
 
 
 @app.cell(hide_code=True)
@@ -16468,7 +15386,6 @@ def _(mo):
 
     The full-data model ensemble is frozen and ready for Kaggle test inference.
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -16479,16 +15396,15 @@ def _(mo):
     ### Test feature assembly
     Execute the refactored, reusable multi-table feature pipeline (`build_test_features`) against `application_test.csv` and the raw historical tables to construct the test feature matrix.
     """)
-    return
 
 
 @app.cell
 def _(Path, build_test_features):
     X_test = build_test_features(
-            data_dir=Path("data"),
-            output_path=Path("data/processed/application_test_features.csv"),
-            include_id=False,  # SK_ID_CURR retained as DataFrame index
-        )
+        data_dir=Path("data"),
+        output_path=Path("data/processed/application_test_features.csv"),
+        include_id=False,  # SK_ID_CURR retained as DataFrame index
+    )
     return (X_test,)
 
 
@@ -16508,21 +15424,17 @@ def _(mo):
     - Unique index with zero duplicate applicant IDs;
     - Zero duplicate column headers.
     """)
-    return
 
 
 @app.cell
 def _(ACCEPTED_FINAL_FEATURES, X_test):
     assert X_test.shape[1] == 166
 
-    assert list(X_test.columns) == list(
-        ACCEPTED_FINAL_FEATURES
-    )
+    assert list(X_test.columns) == list(ACCEPTED_FINAL_FEATURES)
 
     assert X_test.index.is_unique
 
     assert not X_test.columns.duplicated().any()
-    return
 
 
 @app.cell(hide_code=True)
@@ -16531,38 +15443,21 @@ def _(mo):
     ### Final ensemble inference
     Generate probability predictions for all 48,744 test applications from each full-data model and blend them using the frozen ensemble weights (`0.36 * CatBoost + 0.28 * LightGBM + 0.36 * XGBoost`).
     """)
-    return
 
 
 @app.cell
 def _(X_test, catboost_full, lgbm_full, xgb_full):
-    catboost_test_pred = (
-        catboost_full.predict_proba(
-            X_test
-        )[:, 1]
-    )
+    catboost_test_pred = catboost_full.predict_proba(X_test)[:, 1]
 
-    xgb_test_pred = (
-        xgb_full.predict_proba(
-            X_test
-        )[:, 1]
-    )
+    xgb_test_pred = xgb_full.predict_proba(X_test)[:, 1]
 
-    lgbm_test_pred = (
-        lgbm_full.predict_proba(
-            X_test
-        )[:, 1]
-    )
+    lgbm_test_pred = lgbm_full.predict_proba(X_test)[:, 1]
     return catboost_test_pred, lgbm_test_pred, xgb_test_pred
 
 
 @app.cell
 def _(catboost_test_pred, lgbm_test_pred, xgb_test_pred):
-    test_pred = (
-        0.36 * catboost_test_pred
-        + 0.28 * lgbm_test_pred
-        + 0.36 * xgb_test_pred
-    )
+    test_pred = 0.36 * catboost_test_pred + 0.28 * lgbm_test_pred + 0.36 * xgb_test_pred
     return (test_pred,)
 
 
@@ -16572,18 +15467,16 @@ def _(mo):
     ### Submission creation & format verification
     Format test predictions into the competition submission schema (`SK_ID_CURR`, `TARGET`), serialize to `submission_final_ensemble.csv`, and assert complete row coverage and valid probability bounds [0, 1].
     """)
-    return
 
 
 @app.cell
 def _(application_test, pd, test_pred):
-    submission = pd.DataFrame({
-        "SK_ID_CURR":
-            application_test["SK_ID_CURR"],
-
-        "TARGET":
-            test_pred,
-    })
+    submission = pd.DataFrame(
+        {
+            "SK_ID_CURR": application_test["SK_ID_CURR"],
+            "TARGET": test_pred,
+        }
+    )
 
     submission.to_csv(
         "submission_final_ensemble.csv",
@@ -16596,19 +15489,18 @@ def _(application_test, pd, test_pred):
 
 @app.cell
 def _(application_test, submission):
-    assert len(submission) == len(
-        application_test
+    assert len(submission) == len(application_test)
+
+    assert (
+        submission["TARGET"]
+        .between(
+            0,
+            1,
+        )
+        .all()
     )
 
-    assert submission["TARGET"].between(
-        0,
-        1,
-    ).all()
-
-    assert submission[
-        "SK_ID_CURR"
-    ].is_unique
-    return
+    assert submission["SK_ID_CURR"].is_unique
 
 
 @app.cell(hide_code=True)
@@ -16632,7 +15524,6 @@ def _(mo):
     ### Interpretation
     The exceptionally close agreement across all four evaluation tracks (OOF ~0.79298, untouched holdout 0.79319, public leaderboard 0.79366, private leaderboard 0.79126) confirms the validity and discipline of the project's validation strategy. By isolating the holdout dataset and optimizing feature representations and hyperparameters strictly on fixed cross-validation folds, the system avoided adaptive overfitting and generalized reliably to completely unseen test data.
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -16687,7 +15578,6 @@ def _(mo):
     ### Final decision
     **RESEARCH STAGE CLOSED**
     """)
-    return
 
 
 if __name__ == "__main__":

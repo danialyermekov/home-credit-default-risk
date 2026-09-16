@@ -17,39 +17,31 @@ and compatible dtypes defined by ACCEPTED_FINAL_FEATURES from schema.py.
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Sequence
 
-import numpy as np
 import pandas as pd
 
 from home_credit.features.application import (
-    HOUSING_COLUMN_TOKENS,
     build_application_features,
 )
 from home_credit.features.bureau import (
-    BUREAU_ACCEPTED_FEATURES,
     BUREAU_COUNT_FEATURES,
     build_bureau_features,
 )
 from home_credit.features.bureau_balance import (
-    BBX_ACCEPTED_FEATURES,
     build_bureau_balance_features,
 )
 from home_credit.features.credit_card import (
-    CREDIT_CARD_ACCEPTED_FEATURES,
     build_credit_card_features,
 )
 from home_credit.features.installments import (
-    INSTALLMENTS_ACCEPTED_FEATURES,
     build_installments_features,
 )
 from home_credit.features.pos_cash import (
-    POS_ACCEPTED_FEATURES,
     build_pos_cash_features,
 )
 from home_credit.features.previous_application import (
-    PREVIOUS_APPLICATION_ACCEPTED_FEATURES,
     build_previous_application_features,
 )
 from home_credit.schema import (
@@ -126,7 +118,8 @@ def assemble_features(
     bureau_balance_features_df : pd.DataFrame | None, optional
         Precomputed bureau_balance features from build_bureau_balance_features.
     previous_application_features_df : pd.DataFrame | None, optional
-        Precomputed previous application features from build_previous_application_features.
+        Precomputed previous application features
+            from build_previous_application_features.
     credit_card_features_df : pd.DataFrame | None, optional
         Precomputed credit card features from build_credit_card_features.
     installments_features_df : pd.DataFrame | None, optional
@@ -213,8 +206,8 @@ def assemble_features(
     missing_features = [f for f in final_feature_names if f not in df.columns]
     if missing_features:
         raise KeyError(
-            f"Missing {len(missing_features)} features required by ACCEPTED_FINAL_FEATURES: "
-            f"{missing_features[:10]}"
+            f"Missing {len(missing_features)} features"
+            f"required by ACCEPTED_FINAL_FEATURES: {missing_features[:10]}"
         )
 
     # Ensure categorical dtypes
@@ -244,7 +237,8 @@ def build_feature_dataset(
     accepted_features: Sequence[str] | None = None,
     include_id: bool = False,
 ) -> pd.DataFrame:
-    """Build the complete feature matrix by computing and assembling features from all raw tables.
+    """Build the complete feature matrix
+        by computing and assembling features from all raw tables.
 
     Parameters
     ----------
@@ -316,7 +310,9 @@ def build_test_features(
     pd.DataFrame
         Complete test feature matrix aligned with ACCEPTED_FINAL_FEATURES.
     """
-    raw_dir = Path(data_dir) / "raw" if (Path(data_dir) / "raw").exists() else Path(data_dir)
+    raw_dir = (
+        Path(data_dir) / "raw" if (Path(data_dir) / "raw").exists() else Path(data_dir)
+    )
 
     print("Loading application_test.csv...")
     application_test = pd.read_csv(raw_dir / "application_test.csv")
@@ -335,7 +331,9 @@ def build_test_features(
 
     print("Building previous_application features...")
     previous_application = pd.read_csv(raw_dir / "previous_application.csv")
-    previous_application_features = build_previous_application_features(previous_application)
+    previous_application_features = build_previous_application_features(
+        previous_application
+    )
     del previous_application
 
     print("Building credit_card features...")
