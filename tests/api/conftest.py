@@ -21,9 +21,7 @@ def fake_prediction_service() -> FakePredictionService:
 def client(
     fake_prediction_service: FakePredictionService,
 ) -> Iterator[TestClient]:
-    app.dependency_overrides[get_prediction_service] = (
-        lambda: fake_prediction_service
-    )
+    app.dependency_overrides[get_prediction_service] = lambda: fake_prediction_service
 
     with TestClient(app) as client:
         yield client
