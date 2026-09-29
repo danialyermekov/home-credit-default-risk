@@ -1,0 +1,46 @@
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_DB: home_credit
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d home_credit"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    image: homecredit-app
+    build: .
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:${POSTGRES_PASSWORD}@postgres:5432/home_credit
+      MODEL_PATH: /app/artifacts/models/catboost_full_model.cbm
+      FEATURE_VERSION: v1
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  materialize:
+    image: homecredit-app
+    command: uv run python -m home_credit.scripts.materialize_features
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:${POSTGRES_PASSWORD}@postgres:5432/home_credit
+      FEATURE_VERSION: v1
+    volumes:
+      - ./data:/app/data:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles:
+      - tools
+
+volumes:
+  postgres_data:

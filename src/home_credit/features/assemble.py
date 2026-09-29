@@ -11,7 +11,7 @@ feature engineering modules:
 6. bureau_balance
 
 Guarantees that the resulting feature matrix has the exact column names, order,
-and compatible dtypes defined by ACCEPTED_FINAL_FEATURES from schema.py.
+and compatible dtypes defined by ACCEPTED_FINAL_FEATURES from schema_features.py.
 """
 
 from __future__ import annotations
@@ -44,7 +44,7 @@ from home_credit.features.pos_cash import (
 from home_credit.features.previous_application import (
     build_previous_application_features,
 )
-from home_credit.schema import (
+from home_credit.schema_features import (
     ACCEPTED_CATEGORICAL_FEATURES,
     ACCEPTED_FINAL_FEATURES,
 )
@@ -56,7 +56,7 @@ def load_accepted_final_features(
     """Load the frozen ACCEPTED_FINAL_FEATURES list.
 
     If model_path is explicitly provided, loads feature_names from model artifact;
-    otherwise returns the frozen 166-feature list from schema.py.
+    otherwise returns the frozen 166-feature list from schema_features.py.
 
     Parameters
     ----------

@@ -9,7 +9,7 @@ def _(mo):
     mo.md(r"""
     ## Validation contract
 
-    The prediction unit is one current loan application identified by `SK_ID_CURR`.
+    The prediction features is one current loan application identified by `SK_ID_CURR`.
 
     The public Home Credit dataset does not provide:
 

@@ -1,6 +1,6 @@
 """Home Credit Default Risk machine learning package."""
 
-from home_credit.schema import (
+from home_credit.schema_features import (
     ACCEPTED_CATEGORICAL_FEATURES,
     ACCEPTED_FINAL_FEATURES,
 )

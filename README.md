@@ -2,9 +2,9 @@
 
 End-to-end machine learning project for predicting credit default risk using the **Home Credit Default Risk** dataset.
 
-The project is built as a complete applied ML workflow: from exploratory data analysis and feature engineering to model validation, optimization, interpretation, and deployment.
+The project combines a frozen ML research workflow with a portfolio-grade, production-like serving system. It is not a deployed banking system.
 
-> **Current status:** Complete end-to-end ML cycle finalized. Research stage frozen (166 features, three-model tuned ensemble, OOF ROC-AUC 0.79298, holdout ROC-AUC 0.79319, Kaggle private 0.79126). Modular package refactored under `src/home_credit/` for production inference.
+> **Current status:** Research is frozen at exactly 166 production features. The research champion is a CatBoost + LightGBM + XGBoost ensemble (project-reported ROC-AUC: 0.79298 OOF, 0.79319 holdout, 0.79126 Kaggle private). Offline feature materialization, PostgreSQL storage, a single-CatBoost prediction service, and FastAPI endpoints are implemented under `src/home_credit/`. Serving uses CatBoost alone, not the research ensemble.
 
 ---
 
@@ -20,7 +20,7 @@ The project focuses not only on maximizing predictive performance, but also on b
 * validation strategy;
 * feature engineering;
 * model evaluation;
-* leakage prevention;
+* leakage controls and validation alignment;
 * model interpretation;
 * reproducibility.
 
@@ -373,7 +373,7 @@ Inf values: 0
 
 ## Validation Strategy & Evaluation Contract
 
-To prevent data leakage and ensure realistic performance estimation under extreme class imbalance (11.4:1), a disciplined validation protocol was established before any model training:
+To reduce leakage risk and align evaluation under extreme class imbalance (11.4:1), the project uses the following validation protocol:
 
 1. **85% Development / 15% Holdout Split (`split_v1.parquet`)**:
    - Total rows: 307,511.
@@ -389,7 +389,7 @@ To prevent data leakage and ensure realistic performance estimation under extrem
 4. **Secondary Policy & Threshold Metrics**:
    - **Top-10% Review Policy**: In credit underwriting, risk teams review the top 10% highest-risk applicants. We track **Precision@10%** and **Recall@10%** to measure real operational value.
    - **Binary Cross-Entropy (LogLoss)**: Calibrated probability evaluation.
-5. **Leakage Prevention**:
+5. **Leakage Controls**:
    - Point-in-time cutoffs (`DAYS_* <= 0`, `MONTHS_BALANCE <= 0`) enforced across all historical tables.
    - Zero out-of-fold target encoding; categorical variables handled natively by gradient boosters or explicit missing categories.
 
@@ -472,7 +472,7 @@ Full-data refit models on 100% of available training data generated predictions 
 
 ### Validation Alignment Summary
 
-The alignment across evaluation splits demonstrates zero data leakage and rock-solid generalization:
+The close results across evaluation splits support validation alignment, but do not prove that every possible source of leakage or distribution shift has been eliminated:
 - 5-Fold CV OOF ROC-AUC: **0.79298**
 - Untouched Holdout ROC-AUC: **0.79319**
 - Kaggle Public ROC-AUC: **0.79366**
@@ -502,107 +502,142 @@ Comprehensive error analysis was conducted on out-of-fold predictions to evaluat
 
 ## Production Architecture & Serving Decision
 
-The project defines a clear two-track model deployment strategy:
+The research champion is the tuned CatBoost + LightGBM + XGBoost probability ensemble (holdout ROC-AUC 0.79319, according to the project report). The implemented real-time serving path deliberately loads one CatBoost model on the same frozen 166-feature schema. Its reported holdout ROC-AUC is 0.79048. A single model keeps the request path and model artifact simpler; no serving latency or memory improvement has been measured here.
 
-1. **Research & Batch Scoring Champion**:
-   - Three-model tuned probability ensemble (`0.36 * CatBoost + 0.28 * LightGBM + 0.36 * XGBoost`).
-   - Maximizes discriminatory ranking (ROC-AUC 0.79319). Suitable for offline portfolio risk scoring and competition submissions.
-2. **Real-Time Serving Candidate (FastAPI)**:
-   - Single tuned CatBoost model (`FINAL_CB_PARAMS`) on the 166-feature schema (`artifacts/models/catboost_full_model.cbm`).
-   - **Rationale**:
-     - Retains **99.6%** of the ensemble's discriminatory power (ROC-AUC 0.79048 vs. 0.79319).
-     - 3x lower inference latency, reduced memory footprint, and simpler horizontal scaling.
-     - Single model artifact eliminating multi-runtime dependencies and heterogeneous categorical handling.
-     - Native handling of missing values and pandas category types.
+### Implemented production serving pipeline
+
+1. `src/home_credit/features/` contains application and historical-table feature builders; `assemble.py` joins them into the exact feature names and order in `schema_features.py`.
+2. The offline `home_credit.scripts.materialize_features` command reads the raw Home Credit tables from `data/raw/` (including `application_test.csv`), builds the 166 features, creates the table if needed, and writes to PostgreSQL. Historical aggregations run here, outside API requests.
+3. SQLAlchemy Core defines `applicant_features` with `SK_ID_CURR` as primary key, 166 feature columns, `feature_version`, and `updated_at`. Materialization uses PostgreSQL upsert on `SK_ID_CURR`, so rerunning it updates existing applicants rather than creating duplicate rows.
+4. `FeatureRepository` reads the stored features by applicant ID. `PredictionService` receives that repository and a loaded CatBoost model through dependency injection, checks `feature_version`, restores the frozen feature order, fills missing categorical values, and returns `predict_proba` for default class `1`.
+5. FastAPI keeps HTTP routes in `api/`, Pydantic request/response models in `schemas/`, and the database/model wiring in `core/dependencies.py`: settings → cached engine → repository → prediction service. The model and engine are cached across requests. `GET /health` checks the database; `POST /prediction` accepts `{"sk_id_curr": 123456}` and returns `sk_id_curr` plus `probability`. An unknown applicant returns 404; an invalid request returns 422.
+
+This is a portfolio production-like architecture, not an operational banking deployment.
 
 ---
 
 ## Project structure
 
-The repository is organized into a modular ML production package, clean GitHub presentation notebooks, automated test suites, and archival research artifacts:
-
 ```text
 home-credit/
-├── src/
-│   └── home_credit/             # Reusable package code
-│       ├── features/            # Feature engineering modules & assembly
-│       │   ├── application.py
-│       │   ├── bureau.py
-│       │   ├── bureau_balance.py
-│       │   ├── previous_application.py
-│       │   ├── credit_card.py
-│       │   ├── installments.py
-│       │   ├── pos_cash.py
-│       │   └── assemble.py
-│       ├── schema.py            # Frozen production 166-feature schema
-│       └── inference/           # Inference runtime utilities
-├── notebooks/                   # Clean GitHub-readable walkthroughs
-│   ├── 01_feature_engineering.ipynb
-│   └── 02_modeling_report.ipynb
-├── tests/                       # Automated checks & feature parity tests
-│   └── test_features.py
-├── research/                    # Full experiment history (frozen archival Marimo notebooks)
-│   ├── eda.py
-│   ├── datasets.py
-│   └── modeling.py
-├── data/                        # Local raw tables and processed datasets (excluded from Git)
-│   ├── raw/
-│   └── processed/
-├── artifacts/                   # Local model / experiment outputs
-│   ├── models/                  # Trained CatBoost, LightGBM, and XGBoost full models
-│   ├── predictions/             # Out-of-fold predictions
-│   ├── tracking/                # Local MLflow and Optuna SQLite databases
-│   └── split_v1.parquet         # Fixed 85/15 stratified train/holdout split
-├── outputs/                     # Submissions / exported results
-│   └── submissions/
-├── pyproject.toml               # Project metadata, dependencies, and build configuration
-├── uv.lock                      # Exact locked dependency graph
-├── requirements.txt             # Auxiliary dependency specification
+├── src/home_credit/
+│   ├── api/prediction.py                 # POST /prediction
+│   ├── core/                             # Settings, FastAPI dependencies, exceptions
+│   │   ├── config.py
+│   │   ├── dependencies.py
+│   │   └── exceptions.py
+│   ├── db/                               # SQLAlchemy Core table, repository, upsert
+│   │   ├── connection.py
+│   │   ├── tables.py
+│   │   ├── repository.py
+│   │   └── materialize.py
+│   ├── features/                         # Seven source builders and one assembler
+│   │   ├── application.py
+│   │   ├── bureau.py
+│   │   ├── bureau_balance.py
+│   │   ├── previous_application.py
+│   │   ├── credit_card.py
+│   │   ├── installments.py
+│   │   ├── pos_cash.py
+│   │   └── assemble.py
+│   ├── schemas/prediction.py             # Pydantic HTTP models
+│   ├── scripts/materialize_features.py  # Offline raw-data pipeline
+│   ├── services/prediction.py            # PredictionService
+│   ├── main.py                           # FastAPI app and GET /health
+│   └── schema_features.py                # Frozen 166-feature schema
+├── tests/
+│   ├── unit/                             # Feature builders, assembler, schema
+│   ├── integration/                      # PostgreSQL materialization, upsert, repository
+│   ├── services/                         # PredictionService with fake repository/model
+│   └── api/                              # TestClient and dependency overrides
+├── research/                             # Frozen Marimo research: eda.py, datasets.py, modeling.py
+├── notebooks/                            # Feature engineering and modeling reports
+├── data/raw/                             # Local Home Credit CSVs; excluded from Git and image
+├── artifacts/models/                     # Local model artifacts; excluded from Git
+├── Dockerfile
+├── docker-compose.yaml
+├── .dockerignore
+├── pyproject.toml
+├── uv.lock
 └── README.md
 ```
-
-- **`src/home_credit/`**: Reusable Python package containing typed feature builders and the frozen production schema.
-- **`notebooks/`**: Clean, top-to-bottom runnable notebooks demonstrating feature engineering and summarizing modeling results for GitHub portfolios.
-- **`tests/`**: Automated unit and parity tests verifying schema integrity and feature calculation accuracy.
-- **`research/`**: Complete historical research trajectory (EDA, multi-table dataset exploration, and full modeling experimentation).
-- **`artifacts/`**: Materialized model binaries, OOF predictions, tracking databases, and fixed splits.
-- **`outputs/`**: Final competition test submissions and exports.
 
 ---
 
 ## Tech stack
 
-Current tools:
+**Modeling / research:** Python 3.13 (Docker image), Pandas, NumPy, CatBoost, LightGBM, XGBoost, scikit-learn, SciPy, Optuna, MLflow, Plotly, Marimo, PyArrow.
 
-* Python
-* Pandas
-* NumPy
-* SciPy
-* scikit-learn
-* LightGBM
-* CatBoost
-* XGBoost
-* Optuna
-* MLflow
-* Plotly
-* Marimo
-* PyArrow
-* Pytest
+**Serving / engineering:** FastAPI, Pydantic, pydantic-settings, SQLAlchemy Core, PostgreSQL, psycopg, Pytest, Ruff, Pyright, uv, Docker, Docker Compose. `pyproject.toml` accepts Python 3.12+, while the Dockerfile pins a uv-based Python 3.13 image. Research dependencies live in the optional `research` group.
 
 ---
 
 ## Running the project
 
-Install dependencies and the `home_credit` package in editable mode using `uv`:
+Run these commands from the repository root. Install the application and development dependencies with uv (Python 3.12+; Docker uses 3.13):
 
 ```bash
 uv sync
 ```
 
-Run test suite:
+For Marimo, MLflow, and the other research tools, also install the optional group:
+
+```bash
+uv sync --group research
+```
+
+Put the Home Credit CSVs in `data/raw/`. In particular, the materialization script reads `application_test.csv`, `bureau.csv`, `bureau_balance.csv`, `previous_application.csv`, `installments_payments.csv`, `credit_card_balance.csv`, and `POS_CASH_balance.csv`. Raw data is mounted read-only only in the Compose `materialize` service; it is excluded from the API image by `.dockerignore`.
+
+The settings are `DATABASE_URL`, `MODEL_PATH`, and `FEATURE_VERSION`. For local development, set them in a root-level `.env`; Compose also needs `POSTGRES_PASSWORD` there. For example, use a local password of your choice in both URLs:
+
+```dotenv
+POSTGRES_PASSWORD=<local-password>
+DATABASE_URL=postgresql+psycopg://postgres:<local-password>@localhost:5433/home_credit
+MODEL_PATH=artifacts/models/catboost_full_model.cbm
+FEATURE_VERSION=v1
+```
+
+### First Docker run: PostgreSQL and feature materialization
+
+```bash
+docker compose up -d postgres
+docker compose build api
+docker compose --profile tools run --rm materialize
+docker compose up -d
+```
+
+The materialization command creates `applicant_features` and upserts the frozen features. PostgreSQL persists in the named `postgres_data` volume. It listens at `postgres:5432` inside Compose and at `localhost:5433` on the host; the API listens at `http://localhost:8000`. After the first materialization, ordinary startup is:
+
+```bash
+docker compose up -d
+```
+
+Run materialization again when the raw data or feature version changes:
+
+```bash
+docker compose --profile tools run --rm materialize
+```
+
+### Local API and tests
+
+With PostgreSQL running and features materialized, start the API locally:
+
+```bash
+uv run uvicorn home_credit.main:app --host 127.0.0.1 --port 8000
+```
+
+Visit `http://localhost:8000/docs` for Swagger UI. `GET /health` verifies database connectivity; send an ID from the materialized `application_test.csv` rows to `POST /prediction`, for example `{"sk_id_curr": 123456}` with an ID that exists in your data.
+
+Run the full test suite after PostgreSQL is available through the local `DATABASE_URL`:
 
 ```bash
 uv run pytest
+```
+
+The `tests/integration/` tests use PostgreSQL. The feature, service, and API tests can run without it:
+
+```bash
+uv run pytest tests/features tests/services tests/api
 ```
 
 Explore research notebooks (Marimo):
@@ -619,5 +654,9 @@ Run MLflow tracking UI:
 uv run mlflow server --host 127.0.0.1 --port 5000 --backend-store-uri sqlite:///artifacts/tracking/mlflow.db --default-artifact-root ./mlartifacts
 ```
 
-Place the Home Credit raw dataset in `data/raw/` before running full feature generation. The raw dataset is intentionally excluded from Git.
+Stop Compose services without deleting the persistent database volume:
+
+```bash
+docker compose down
+```
 

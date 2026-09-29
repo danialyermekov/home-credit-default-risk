@@ -5,7 +5,7 @@ import pytest
 from home_credit.features.application import (
     build_application_features,
 )
-from home_credit.schema import ACCEPTED_CATEGORICAL_FEATURES
+from home_credit.schema_features import ACCEPTED_CATEGORICAL_FEATURES
 
 
 @pytest.fixture

@@ -228,7 +228,7 @@ def _(mo):
 
     Historical tables are not independently divided into training and validation folds.
 
-    The validation unit is the current application (`SK_ID_CURR`).
+    The validation features is the current application (`SK_ID_CURR`).
 
     The intended pipeline is:
 
@@ -267,7 +267,7 @@ def _(mo):
     mo.md(r"""
     # Key findings
 
-    - The prediction unit is one current application (`SK_ID_CURR`).
+    - The prediction features is one current application (`SK_ID_CURR`).
     - No persistent customer ID is available, so customer-level group validation cannot be constructed.
     - No current-application timestamp is available, so genuine temporal validation is not possible.
     - Historical tables contain relative event timing that can be used for cutoff-aware feature engineering and leakage checks.

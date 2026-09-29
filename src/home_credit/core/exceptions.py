@@ -1,0 +1,2 @@
+class ApplicantNotFoundError(Exception):
+    pass

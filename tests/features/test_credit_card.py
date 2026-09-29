@@ -6,7 +6,7 @@ from home_credit.features.credit_card import (
     CREDIT_CARD_ACCEPTED_FEATURES,
     build_credit_card_features,
 )
-from home_credit.schema import ACCEPTED_FINAL_FEATURES
+from home_credit.schema_features import ACCEPTED_FINAL_FEATURES
 
 
 @pytest.fixture

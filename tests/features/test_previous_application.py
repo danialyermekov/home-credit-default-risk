@@ -6,7 +6,7 @@ from home_credit.features.previous_application import (
     PREVIOUS_APPLICATION_ACCEPTED_FEATURES,
     build_previous_application_features,
 )
-from home_credit.schema import ACCEPTED_FINAL_FEATURES
+from home_credit.schema_features import ACCEPTED_FINAL_FEATURES
 
 
 @pytest.fixture

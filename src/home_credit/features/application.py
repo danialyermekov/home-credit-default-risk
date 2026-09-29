@@ -10,7 +10,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from home_credit.schema import ACCEPTED_CATEGORICAL_FEATURES
+from home_credit.schema_features import ACCEPTED_CATEGORICAL_FEATURES
 
 # Tokens used to identify raw housing columns for computing HOUSING_INFO_MISSING_PCT
 HOUSING_COLUMN_TOKENS: tuple[str, ...] = (

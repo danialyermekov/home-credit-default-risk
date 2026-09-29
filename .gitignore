@@ -9,11 +9,22 @@ dist/
 wheels/
 *.egg-info/
 
+# Tool caches
+.ruff_cache/
+.pyright/
+.mypy_cache/
+.coverage
+htmlcov/
+.coverage.*
+
 # Virtual environments
 .venv/
 venv/
 ENV/
 env/
+.env
+.env.*
+!.env.example
 
 # IDE and Editor files
 .vscode/
@@ -26,7 +37,15 @@ Thumbs.db
 # Jupyter / Marimo / Agent artifacts
 .ipynb_checkpoints/
 __marimo__/
+
+# AI / agent tooling
+AGENTS.md
+CLAUDE.md
+
 .agents/
+.claude/
+.codex/
+.wolf/
 
 # Data files & Archives
 data/
@@ -70,3 +89,6 @@ lightning_logs/
 
 # Logs
 *.log
+
+# Decisions review
+research_decisions_catalog.md

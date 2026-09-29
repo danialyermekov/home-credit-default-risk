@@ -1,4 +1,7 @@
-from home_credit.schema import ACCEPTED_CATEGORICAL_FEATURES, ACCEPTED_FINAL_FEATURES
+from home_credit.schema_features import (
+    ACCEPTED_CATEGORICAL_FEATURES,
+    ACCEPTED_FINAL_FEATURES,
+)
 
 
 def test_schema_feature_count() -> None:
