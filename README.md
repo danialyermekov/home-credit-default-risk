@@ -546,7 +546,7 @@ home-credit/
 │   ├── main.py                           # FastAPI app and GET /health
 │   └── schema_features.py                # Frozen 166-feature schema
 ├── tests/
-│   ├── unit/                             # Feature builders, assembler, schema
+│   ├── features/                         # Feature builders, assembler, schema
 │   ├── integration/                      # PostgreSQL materialization, upsert, repository
 │   ├── services/                         # PredictionService with fake repository/model
 │   └── api/                              # TestClient and dependency overrides
