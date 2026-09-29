@@ -36,7 +36,7 @@ jobs:
         run: uv run ruff format --check src/home_credit tests
 
       - name: Run features, service and API tests
-        run: uv run pytest tests/unit tests/services tests/api -v
+        run: uv run pytest tests/features tests/services tests/api -v
 
 
   integration:
