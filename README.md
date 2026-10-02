@@ -458,7 +458,7 @@ The final models and ensemble were evaluated on the **46,127 untouched holdout r
 
 | Model Candidate | Average Precision (AP) | ROC-AUC | LogLoss | Precision@Top10% | Recall@Top10% |
 | :--- | :---: | :---: | :---: | :---: | :---: |
-| **CatBoost (Trial 29)** | 0.28038 | 0.79048 | 0.23656 | 0.29640 | 0.36708 |
+| **CatBoost (Tuned)** | 0.28038 | 0.79048 | 0.23656 | 0.29640 | 0.36708 |
 | **LightGBM (Tuned)** | 0.28079 | 0.79124 | 0.23642 | 0.29640 | 0.36708 |
 | **XGBoost (Tuned)** | 0.28214 | 0.79117 | 0.23617 | 0.30052 | 0.37218 |
 | **Final Ensemble (0.36 / 0.28 / 0.36)** | **0.28393** | **0.79319** | **0.23561** | **0.30204** | **0.37406** |
@@ -541,7 +541,7 @@ home-credit/
 │   │   ├── pos_cash.py
 │   │   └── assemble.py
 │   ├── schemas/prediction.py             # Pydantic HTTP models
-│   ├── scripts/materialize_features.py  # Offline raw-data pipeline
+│   ├── scripts/materialize_features.py   # Offline raw-data pipeline
 │   ├── services/prediction.py            # PredictionService
 │   ├── main.py                           # FastAPI app and GET /health
 │   └── schema_features.py                # Frozen 166-feature schema
